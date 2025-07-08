@@ -12,9 +12,10 @@ import (
 func main() {
 	flags.Parse()
 	global.Config = core.ReadConf()
-	core.InitLogrus() // 初始化日志文件
-
+	core.InitLogrus()               // 初始化日志文件
 	global.DB = core.InitDB()       // 连接 mysql
 	global.Redis = core.InitRedis() // 连接 redis
-	router.Run()                    // 启动 web 服务
+
+	flags.Run()
+	router.Run()
 }

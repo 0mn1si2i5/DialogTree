@@ -14,9 +14,7 @@ import (
 func InitDB() (db *gorm.DB) {
 	gdb := global.Config.DB
 
-	db, err := gorm.Open(mysql.Open(gdb.DSN()), &gorm.Config{
-		DisableForeignKeyConstraintWhenMigrating: true, // 不生成外键约束，否则迁移的时候会报错
-	})
+	db, err := gorm.Open(mysql.Open(gdb.DSN()), &gorm.Config{})
 	if err != nil {
 		if strings.Contains(err.Error(), "Unknown database") {
 			db = createDB()
@@ -37,7 +35,7 @@ func InitDB() (db *gorm.DB) {
 func createDB() *gorm.DB {
 	// 创建数据库
 	gdb := global.Config.DB
-	db, err := gorm.Open(mysql.Open(gdb.DSNWithoutDB()), &gorm.Config{DisableForeignKeyConstraintWhenMigrating: true})
+	db, err := gorm.Open(mysql.Open(gdb.DSNWithoutDB()), &gorm.Config{})
 	if err != nil {
 		logrus.Fatalln("DB open error: ", err)
 	}
@@ -49,5 +47,6 @@ func createDB() *gorm.DB {
 		return nil
 	}
 	logrus.Infoln("Database created: ", dbName)
+	db.Exec("USE " + dbName + ";")
 	return db
 }
