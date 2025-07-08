@@ -1,0 +1,14 @@
+[2025-07-08 22:22:01] [36m[info][0m init_logrus.go:160 dialogTree/core.InitLogrus logrus init success
+[2025-07-08 22:22:01] [31m[fatal][0m init_db.go:24 dialogTree/core.InitDB DB open error:  Error 1045 (28000): Access denied for user 'root'@'localhost' (using password: YES)
+[2025-07-08 22:22:42] [36m[info][0m init_logrus.go:160 dialogTree/core.InitLogrus logrus init success
+[2025-07-08 22:22:42] [36m[info][0m init_db.go:51 dialogTree/core.createDB Database created:  dialog_tree
+[2025-07-08 22:22:42] [36m[info][0m init_db.go:33 dialogTree/core.InitDB DataBase [127.0.0.1:3306] connection successful
+[2025-07-08 22:22:42] [36m[info][0m init_redis.go:22 dialogTree/core.InitRedis Redis [127.0.0.1:6379] connection successful
+[2025-07-08 22:33:59] [36m[info][0m init_logrus.go:160 dialogTree/core.InitLogrus logrus init success
+[2025-07-08 22:33:59] [36m[info][0m init_db.go:33 dialogTree/core.InitDB DataBase [127.0.0.1:3306] connection successful
+[2025-07-08 22:33:59] [36m[info][0m init_redis.go:22 dialogTree/core.InitRedis Redis [127.0.0.1:6379] connection successful
+[2025-07-08 22:33:59] [36m[info][0m enter.go:19 dialogTree/router.Run gin running on: localhost:18080
+[2025-07-08 22:43:04] [36m[info][0m init_logrus.go:160 dialogTree/core.InitLogrus logrus init success
+[2025-07-08 22:43:04] [36m[info][0m init_db.go:33 dialogTree/core.InitDB DataBase [127.0.0.1:3306] connection successful
+[2025-07-08 22:43:04] [36m[info][0m init_redis.go:22 dialogTree/core.InitRedis Redis [127.0.0.1:6379] connection successful
+[2025-07-08 22:43:04] [36m[info][0m enter.go:19 dialogTree/router.Run gin running on: localhost:8080
