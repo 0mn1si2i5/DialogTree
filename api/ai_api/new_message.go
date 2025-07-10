@@ -29,7 +29,7 @@ func (AiApi) NewMessageView(c *gin.Context) {
 		var mmodel models.MessageModel
 		global.DB.Find(&mmodel, *req.ParentID)
 		prevSum := mmodel.Summary
-		msg += fmt.Sprintf("上轮对话：%s", prevSum)
+		msg += fmt.Sprintf("上轮对话：%s;本轮问题：", prevSum)
 	}
 	msg += req.Content
 	msgChan, err := chat_anywhere_ai.ChatStream(msg)
@@ -38,14 +38,11 @@ func (AiApi) NewMessageView(c *gin.Context) {
 		return
 	}
 	var ans string
-	go func() {
-		for s := range msgChan {
-			res.SSESuccess(s, c)
-			ans += s
-		}
-		//res.SSESuccess("[DONE]", c)
-		Archive(msg, ans, req)
-	}()
+	for s := range msgChan {
+		res.SSESuccess(s, c)
+		ans += s
+	}
+	go Archive(msg, ans, req)
 }
 
 type summarizeType struct {
