@@ -13,7 +13,10 @@ func Run() {
 
 	router := gin.Default()
 	router.Static("/uploads", "uploads") // 配置静态路由访问上传文件
-	//routerGroup := router.Group("/api")
+
+	routerGroup := router.Group("/api")
+
+	AiRouter(routerGroup)
 	
 	addr := global.Config.System.Addr()
 	logrus.Infof("gin running on: %s", addr)
