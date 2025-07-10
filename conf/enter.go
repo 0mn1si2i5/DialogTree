@@ -7,4 +7,5 @@ type Config struct {
 	Logrus Logrus `yaml:"logrus"`
 	DB     DB     `yaml:"db"`
 	Redis  Redis  `yaml:"redis"`
+	Ai     Ai     `yaml:"ai"`
 }

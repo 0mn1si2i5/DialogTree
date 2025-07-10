@@ -6,7 +6,7 @@ type DialogModel struct {
 	Model
 	Abstract      string `gorm:"size:256" json:"abstract"`
 	CategoryID    uint   `json:"categoryID"`
-	RootMessageID *uint  `gorm:"unique;not null" json:"rootMessageID"`
+	RootMessageID *uint  `gorm:"unique" json:"rootMessageID"`
 
 	// fk
 	RootMessageModel *MessageModel  `gorm:"foreignKey:RootMessageID;references:ID" json:"-"`
