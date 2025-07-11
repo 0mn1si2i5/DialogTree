@@ -1,6 +1,6 @@
-// Path: ./flags/flag_db.go
+// Path: ./service/db_service/migrate_db.go
 
-package flags
+package db_service
 
 import (
 	"dialogTree/global"
@@ -8,7 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func FlagDB() {
+func MigrateDB() {
 	// 表迁移
 	err := global.DB.AutoMigrate(
 		&models.CategoryModel{},
