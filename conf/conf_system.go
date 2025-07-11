@@ -3,6 +3,7 @@
 package conf
 
 type System struct {
+	Mode    string `yaml:"mode"`
 	Ip      string `yaml:"ip"`
 	Port    string `yaml:"port"`
 	Env     string `yaml:"env"`

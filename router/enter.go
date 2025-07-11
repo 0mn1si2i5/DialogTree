@@ -4,24 +4,20 @@ package router
 
 import (
 	"dialogTree/global"
-	"github.com/gin-gonic/gin"
+	"dialogTree/router/cli_router"
+	"dialogTree/router/gin_router"
 	"github.com/sirupsen/logrus"
+	"os"
 )
 
 func Run() {
-	gin.SetMode(global.Config.System.GinMode) // 设置 gin 模式，对应 settings.yaml 中的 gin_mode
-
-	router := gin.Default()
-	router.Static("/uploads", "uploads") // 配置静态路由访问上传文件
-
-	routerGroup := router.Group("/api")
-
-	AiRouter(routerGroup)
-	
-	addr := global.Config.System.Addr()
-	logrus.Infof("gin running on: %s", addr)
-	err := router.Run(addr)
-	if err != nil {
-		logrus.Fatalln("gin run error: ", err)
+	switch global.Config.System.Mode {
+	case "cli":
+		cli_router.Run()
+	case "web":
+		gin_router.Run()
+	default:
+		logrus.Errorf("%v unknown mode: %s\n", os.Stderr, global.Config.System.Mode)
+		os.Exit(1)
 	}
 }

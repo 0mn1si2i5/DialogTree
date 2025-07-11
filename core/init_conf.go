@@ -4,7 +4,6 @@ package core
 
 import (
 	"dialogTree/conf"
-	"dialogTree/flags"
 	"dialogTree/global"
 	"fmt"
 	"github.com/sirupsen/logrus"
@@ -14,9 +13,9 @@ import (
 
 // ReadConf 读取 settings.yaml 设置文件并解析配置
 // 如果读取或解析过程中出现错误，将会触发panic
-func ReadConf() (c *conf.Config) {
+func ReadConf(quiet bool) (c *conf.Config) {
 	// 从指定的配置文件路径读取内容
-	byteData, err := os.ReadFile(flags.FlagOptions.File)
+	byteData, err := os.ReadFile("config.yaml")
 	if err != nil {
 		panic(err)
 	}
@@ -29,10 +28,10 @@ func ReadConf() (c *conf.Config) {
 	if err != nil {
 		panic(fmt.Sprintln("yaml unmarshal err: ", err))
 	}
-
-	// 打印配置文件读取成功的消息
-	fmt.Printf("configuration of: %s success!\n", flags.FlagOptions.File)
-
+	if !quiet {
+		// 打印配置文件读取成功的消息
+		fmt.Printf("configuration of: %s success!\n", "config.yaml")
+	}
 	return
 }
 
