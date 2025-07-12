@@ -4,6 +4,7 @@ package ai_cli
 
 import (
 	"context"
+	"dialogTree/service/ai_service/chat_anywhere_ai"
 	"fmt"
 
 	"github.com/urfave/cli/v3"
@@ -20,13 +21,30 @@ var ChitchatCommand = &cli.Command{
 			Usage:   "Text prompt to send",
 		},
 	},
-	Action: func(ctx context.Context, c *cli.Command) error {
-		text := c.String("text")
-		if text == "" && c.Args().Len() > 0 {
-			text = c.Args().First()
-		}
-		// 模拟 GPT 响应
-		fmt.Printf("🤖 GPT: [Chitchat] You said: %s\n", text)
-		return nil
-	},
+	Action: chat,
+}
+
+func chat(ctx context.Context, c *cli.Command) error {
+	text := c.String("text")
+	if text == "" && c.Args().Len() > 0 {
+		text = c.Args().First()
+	}
+	// 响应
+	fmt.Printf("🤖 Agent: ")
+	mChan, sChan, err := chat_anywhere_ai.ChatWithSummarize(text, 0) // todo parent
+	if err != nil {
+		return err
+	}
+	for m := range mChan {
+		fmt.Print(m)
+	}
+
+	var summary string
+	for s := range sChan {
+		fmt.Println(s)
+		summary += s
+	}
+	fmt.Println("summary done: ", summary)
+
+	return nil
 }

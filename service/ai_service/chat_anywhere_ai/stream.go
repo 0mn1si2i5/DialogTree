@@ -6,7 +6,9 @@ import (
 	"bufio"
 	"dialogTree/global"
 	"encoding/json"
+	"fmt"
 	"github.com/sirupsen/logrus"
+	"net/http"
 	"strings"
 )
 
@@ -57,55 +59,126 @@ type AIChatStreamResponse struct {
 	SystemFingerprint string `json:"system_fingerprint"`
 }
 
-func ChatStream(msg string) (msgChan chan string, err error) {
+func streamSplitter(scanner *bufio.Scanner, res *http.Response, msgChan, sumChan chan string) {
+	defer close(sumChan)
+	defer res.Body.Close()
+
+	var slidingBuffer strings.Builder // 缓冲所有 token
+	const marker = "^¥&"
+
+	var state int8 = 0 // 状态机：0=正常，1=^，2=^¥，3=^¥&
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// 跳过空行
+		if line == "" {
+			continue
+		}
+
+		// 检查是否是 SSE 数据行
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		// 提取 JSON 部分（去掉 "data: " 前缀）
+		jsonData := strings.TrimPrefix(line, "data: ")
+
+		// 检查是否是结束标记
+		if jsonData == "[DONE]" {
+			wholeMsg := slidingBuffer.String()
+			msgs := strings.SplitN(wholeMsg, marker, 2)
+
+			if len(msgs) == 2 {
+				summary := msgs[1]
+				sumChan <- summary // ✅ 会阻塞等待消费
+			} else {
+				logrus.Warn("未能正确提取摘要")
+			}
+
+			fmt.Println("\n完整消息：", wholeMsg)
+
+			_, ok := <-msgChan
+			if ok {
+				close(msgChan)
+			}
+			return
+		}
+
+		// 解析 json 数据
+		var aiRes AIChatStreamResponse
+		err := json.Unmarshal([]byte(jsonData), &aiRes)
+		if err != nil {
+			logrus.Errorf("JSON 解析失败: %v\n原始数据: %s", err, jsonData)
+			continue
+		}
+
+		if len(aiRes.Choices) == 0 {
+			continue
+		}
+
+		content := aiRes.Choices[0].Delta.Content
+		if content == "" {
+			continue
+		}
+
+		// 组装缓冲内容
+		slidingBuffer.WriteString(content)
+
+		switch state {
+		case 0:
+			if content == "^" || strings.HasSuffix(slidingBuffer.String(), "^") {
+				state = 1
+			} else if content == "^¥" || strings.HasSuffix(slidingBuffer.String(), "^¥") {
+				state = 2
+			} else if content == marker || strings.Contains(slidingBuffer.String(), marker) {
+				state = 3
+			} else {
+				msgChan <- content
+			}
+		case 1:
+			if content == "¥" || strings.HasSuffix(slidingBuffer.String(), "^¥") {
+				state = 2
+			} else {
+				msgChan <- content
+			}
+		case 2:
+			if content == "&" || strings.Contains(slidingBuffer.String(), marker) {
+				state = 3
+				close(msgChan)
+			} else {
+				msgChan <- content
+			}
+		}
+	}
+}
+
+func chatStream(msg string) (msgChan, sumChan chan string, err error) {
 	res, err := baseRequest(msg, global.Config.Ai.ChatAnywhere.Model)
 	if err != nil {
 		return
 	}
 
 	msgChan = make(chan string)
+	sumChan = make(chan string)
 
 	scanner := bufio.NewScanner(res.Body)
 	scanner.Split(bufio.ScanLines)
 
-	go func() {
-		for scanner.Scan() {
-			line := scanner.Text()
-
-			// 跳过空行
-			if line == "" {
-				continue
-			}
-
-			// 检查是否是 SSE 数据行
-			if !strings.HasPrefix(line, "data: ") {
-				continue
-			}
-
-			// 提取 JSON 部分（去掉 "data: " 前缀）
-			jsonData := strings.TrimPrefix(line, "data: ")
-
-			// 检查是否是结束标记
-			if jsonData == "[DONE]" {
-				close(msgChan)
-				return
-			}
-
-			// 解析 json 数据
-			var aiRes AIChatStreamResponse
-			err = json.Unmarshal([]byte(jsonData), &aiRes)
-			if err != nil {
-				logrus.Errorf("JSON 解析失败: %v\n原始数据: %s", err, jsonData)
-				continue
-			}
-
-			if len(aiRes.Choices) == 0 {
-				continue
-			}
-
-			msgChan <- aiRes.Choices[0].Delta.Content
-		}
-	}()
+	go streamSplitter(scanner, res, msgChan, sumChan)
 
 	return
+}
+
+func ChatStream(msg string) (msgChan chan string, err error) {
+	msgChan, sumChan, err := chatStream(msg)
+	go func() {
+		for range sumChan {
+		} // 丢弃概述
+	}()
+	return msgChan, err
+}
+
+func ChatStreamSum(msg string) (msgChan, sumChan chan string, err error) {
+	return chatStream(msg)
 }

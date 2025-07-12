@@ -35,7 +35,7 @@ func Summarize0(msg string) (resp string, err error) {
 	return aiRes.Choices[0].Message.Content, nil
 }
 
-func Summarize(msg string, parentID uint) (msgChan chan string, err error) {
+func ChatWithSummarize(msg string, parentID uint) (msgChan, sumChan chan string, err error) {
 	sendMsg := fmt.Sprintf("¥Q:%s;", msg)
 	if parentID != 0 {
 		var msgModel models.MessageModel
@@ -59,5 +59,5 @@ func Summarize(msg string, parentID uint) (msgChan chan string, err error) {
 			msgModel.Summary, q3, a3, q2, a2, q1, a1, msg,
 		)
 	}
-	return ChatStream(sendMsg)
+	return ChatStreamSum(sendMsg)
 }
