@@ -3,6 +3,7 @@
 package main
 
 import (
+	"dialogTree/common/cres"
 	"dialogTree/core"
 	"dialogTree/global"
 	"dialogTree/router/cli_router"
@@ -10,5 +11,6 @@ import (
 
 func main() {
 	global.Config = core.ReadConf(true)
+	cres.SetAgentLabel()
 	cli_router.Run()
 }

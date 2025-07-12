@@ -3,14 +3,21 @@
 package cres
 
 import (
+	"dialogTree/global"
 	"fmt"
 	"time"
 )
 
-const (
-	agent = "💡Agent"
-	user  = "💬 You "
-)
+var agent string
+var user = "💬 You "
+
+func SetAgentLabel() {
+	if global.Config == nil {
+		agent = "💡Agent"
+	} else {
+		agent = "💡" + global.Config.Ai.ChatAnywhere.Model
+	}
+}
 
 func output(object, msg string, newLine bool) {
 	var nowStr = time.Now().Format("2006-01-02 15:04:05")
@@ -19,6 +26,10 @@ func output(object, msg string, newLine bool) {
 	}
 	out := fmt.Sprintf("[%s]%s: %s", nowStr, object, msg)
 	fmt.Print(out)
+}
+
+func AvatarOnly() {
+	output(agent, "", false)
 }
 
 func Output(msg string) {
@@ -38,7 +49,6 @@ func ErrorMsg(msg string) {
 }
 
 func Stream(msgChan chan string) {
-	output(agent, "", false)
 	for msg := range msgChan {
 		fmt.Print(msg)
 	}

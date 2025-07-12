@@ -26,5 +26,5 @@ var App = &cli.Command{
 		MigrateDBCommand,
 		WebUICommand,
 	},
-	Action: ai_cli.Default,
+	Action: ai_cli.OneTimeChat,
 }

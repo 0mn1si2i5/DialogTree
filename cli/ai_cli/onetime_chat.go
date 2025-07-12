@@ -1,4 +1,4 @@
-// Path: ./cli/ai_cli/default.go
+// Path: ./cli/ai_cli/onetime_chat.go
 
 package ai_cli
 
@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-func Default(ctx context.Context, cmd *cli.Command) error {
+func OneTimeChat(ctx context.Context, cmd *cli.Command) error {
 	var input string
 
 	// 1-如果来自管道（stdin is not terminal）
@@ -46,7 +46,7 @@ func Default(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	// 模拟 GPT 响应
+	cres.AvatarOnly()
 	msgChan, err := chat_anywhere_ai.ChatStream(input)
 	if err != nil {
 		return err
