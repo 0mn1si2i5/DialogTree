@@ -4,44 +4,17 @@ package chat_anywhere_ai
 
 import (
 	"dialogTree/global"
-	"dialogTree/service/ai_service"
+	"dialogTree/models"
 	"encoding/json"
-	"github.com/sirupsen/logrus"
+	"fmt"
 	"io"
+
+	"github.com/sirupsen/logrus"
 )
 
-type AIChatResponse struct {
-	Id      string `json:"id"`
-	Choices []struct {
-		Index   int `json:"index"`
-		Message struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		} `json:"message"`
-		Logprobs     interface{} `json:"logprobs"`
-		FinishReason string      `json:"finish_reason"`
-	} `json:"choices"`
-	Created int    `json:"created"`
-	Model   string `json:"model"`
-	Object  string `json:"object"`
-	Usage   struct {
-		PromptTokens            int `json:"prompt_tokens"`
-		CompletionTokens        int `json:"completion_tokens"`
-		TotalTokens             int `json:"total_tokens"`
-		CompletionTokensDetails struct {
-			AudioTokens     int `json:"audio_tokens"`
-			ReasoningTokens int `json:"reasoning_tokens"`
-		} `json:"completion_tokens_details"`
-		PromptTokensDetails struct {
-			AudioTokens  int `json:"audio_tokens"`
-			CachedTokens int `json:"cached_tokens"`
-		} `json:"prompt_tokens_details"`
-	} `json:"usage"`
-	SystemFingerprint interface{} `json:"system_fingerprint"`
-}
-
-func Summarize(msg string) (resp string, err error) {
-	res, err := baseRequest(msg, global.Config.Ai.BackendAi.Model, ai_service.SummarizeAiRequest)
+// Summarize0 没用了，更耗费 token
+func Summarize0(msg string) (resp string, err error) {
+	res, err := baseRequest(msg, global.Config.Ai.BackendAi.Model)
 	if err != nil {
 		return
 	}
@@ -60,4 +33,31 @@ func Summarize(msg string) (resp string, err error) {
 	}
 
 	return aiRes.Choices[0].Message.Content, nil
+}
+
+func Summarize(msg string, parentID uint) (msgChan chan string, err error) {
+	sendMsg := fmt.Sprintf("¥Q:%s;", msg)
+	if parentID != 0 {
+		var msgModel models.MessageModel
+		err = global.DB.Find(&msgModel, "id = ?", parentID).Preload("ParentModel").Preload("ParentModel.ParentModel").Error
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		var q3, a3, q2, a2, q1, a1 string
+		q1, a1 = msgModel.Prompt, msgModel.Answer
+		if msgModel.ParentModel != nil {
+			q2 = msgModel.ParentModel.Prompt
+			a2 = msgModel.ParentModel.Answer
+
+			if msgModel.ParentModel.ParentModel != nil {
+				q3 = msgModel.ParentModel.ParentModel.Prompt
+				a3 = msgModel.ParentModel.ParentModel.Answer
+			}
+		}
+		sendMsg = fmt.Sprintf("¥H:%s;¥3Q:%s;¥3A:%s;¥2Q:%s;¥2A:%s;¥1Q:%s;¥1A:%s;¥Q:%s;",
+			msgModel.Summary, q3, a3, q2, a2, q1, a1, msg,
+		)
+	}
+	return ChatStream(sendMsg)
 }

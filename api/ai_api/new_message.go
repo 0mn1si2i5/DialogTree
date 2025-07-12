@@ -52,7 +52,7 @@ type summarizeType struct {
 
 func Archive(q, a string, req AiChatReq) {
 	msg := fmt.Sprintf("userQuestion:%s;aiResponse:%s;", q, a)
-	rep, err := chat_anywhere_ai.Summarize(msg)
+	rep, err := chat_anywhere_ai.Summarize0(msg)
 	if err != nil {
 		logrus.Errorf("summarize error: %v\n", err)
 		return

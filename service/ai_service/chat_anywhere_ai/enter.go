@@ -4,7 +4,6 @@ package chat_anywhere_ai
 
 import (
 	"dialogTree/global"
-	"dialogTree/service/ai_service"
 	_ "embed"
 	"encoding/json"
 	"github.com/sirupsen/logrus"
@@ -16,9 +15,6 @@ const baseURL = "https://api.chatanywhere.tech/v1/chat/completions"
 
 //go:embed prompt_chat.prompt
 var chatPrompt string
-
-//go:embed prompt_summarize.prompt
-var summarizePrompt string
 
 type AIChatRequest struct {
 	Model    string    `json:"model"`
@@ -43,18 +39,10 @@ const (
 	CA_CLA_S4      ModelType = "claude-sonnet-4-20250514"
 )
 
-func baseRequest(msg string, model string, requestType ai_service.RequestType) (res *http.Response, err error) {
+func baseRequest(msg string, model string) (res *http.Response, err error) {
 	method := "POST"
 
-	var prompt string
-	var stream bool
-	switch requestType {
-	case ai_service.ChatAiRequest:
-		prompt = chatPrompt
-		stream = true
-	case ai_service.SummarizeAiRequest:
-		prompt = summarizePrompt
-	}
+	var prompt = chatPrompt
 
 	var m = AIChatRequest{
 		Model: model,
@@ -68,7 +56,7 @@ func baseRequest(msg string, model string, requestType ai_service.RequestType) (
 				Content: msg,
 			},
 		},
-		Stream: stream,
+		Stream: true,
 	}
 	bd, err := json.Marshal(m)
 	if err != nil {

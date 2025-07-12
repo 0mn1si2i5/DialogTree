@@ -5,12 +5,40 @@ package chat_anywhere_ai
 import (
 	"bufio"
 	"dialogTree/global"
-	"dialogTree/service/ai_service"
 	"encoding/json"
-	"fmt"
 	"github.com/sirupsen/logrus"
 	"strings"
 )
+
+type AIChatResponse struct {
+	Id      string `json:"id"`
+	Choices []struct {
+		Index   int `json:"index"`
+		Message struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"message"`
+		Logprobs     interface{} `json:"logprobs"`
+		FinishReason string      `json:"finish_reason"`
+	} `json:"choices"`
+	Created int    `json:"created"`
+	Model   string `json:"model"`
+	Object  string `json:"object"`
+	Usage   struct {
+		PromptTokens            int `json:"prompt_tokens"`
+		CompletionTokens        int `json:"completion_tokens"`
+		TotalTokens             int `json:"total_tokens"`
+		CompletionTokensDetails struct {
+			AudioTokens     int `json:"audio_tokens"`
+			ReasoningTokens int `json:"reasoning_tokens"`
+		} `json:"completion_tokens_details"`
+		PromptTokensDetails struct {
+			AudioTokens  int `json:"audio_tokens"`
+			CachedTokens int `json:"cached_tokens"`
+		} `json:"prompt_tokens_details"`
+	} `json:"usage"`
+	SystemFingerprint interface{} `json:"system_fingerprint"`
+}
 
 type AIChatStreamResponse struct {
 	ID      string `json:"id"`
@@ -30,8 +58,7 @@ type AIChatStreamResponse struct {
 }
 
 func ChatStream(msg string) (msgChan chan string, err error) {
-	fmt.Println(msg, global.Config.Ai.ChatAnywhere.Model, ai_service.ChatAiRequest)
-	res, err := baseRequest(msg, global.Config.Ai.ChatAnywhere.Model, ai_service.ChatAiRequest)
+	res, err := baseRequest(msg, global.Config.Ai.ChatAnywhere.Model)
 	if err != nil {
 		return
 	}
