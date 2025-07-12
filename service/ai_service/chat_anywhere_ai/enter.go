@@ -16,6 +16,9 @@ const baseURL = "https://api.chatanywhere.tech/v1/chat/completions"
 //go:embed prompt_chat.prompt
 var chatPrompt string
 
+//go:embed prompt_summarize.prompt
+var summarizePrompt string
+
 type AIChatRequest struct {
 	Model    string    `json:"model"`
 	Messages []Message `json:"messages"`
@@ -39,10 +42,13 @@ const (
 	CA_CLA_S4      ModelType = "claude-sonnet-4-20250514"
 )
 
-func baseRequest(msg string, model string) (res *http.Response, err error) {
+func baseRequest(msg string, model string, summarize bool) (res *http.Response, err error) {
 	method := "POST"
 
 	var prompt = chatPrompt
+	if summarize {
+		prompt = summarizePrompt
+	}
 
 	var m = AIChatRequest{
 		Model: model,

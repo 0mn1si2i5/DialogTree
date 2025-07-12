@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"dialogTree/global"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"net/http"
@@ -57,6 +58,52 @@ type AIChatStreamResponse struct {
 	Created           int64  `json:"created"`
 	Model             string `json:"model"`
 	SystemFingerprint string `json:"system_fingerprint"`
+}
+
+func stream(scanner *bufio.Scanner, res *http.Response, msgChan chan string) {
+	defer close(msgChan)
+	defer res.Body.Close()
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// 跳过空行
+		if line == "" {
+			continue
+		}
+
+		// 检查是否是 SSE 数据行
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		// 提取 JSON 部分（去掉 "data: " 前缀）
+		jsonData := strings.TrimPrefix(line, "data: ")
+
+		// 检查是否是结束标记
+		if jsonData == "[DONE]" {
+			return
+		}
+
+		// 解析 json 数据
+		var aiRes AIChatStreamResponse
+		err := json.Unmarshal([]byte(jsonData), &aiRes)
+		if err != nil {
+			logrus.Errorf("JSON 解析失败: %v\n原始数据: %s", err, jsonData)
+			continue
+		}
+
+		if len(aiRes.Choices) == 0 {
+			continue
+		}
+
+		content := aiRes.Choices[0].Delta.Content
+		if content == "" {
+			continue
+		}
+
+		msgChan <- content
+	}
 }
 
 func streamSplitter(scanner *bufio.Scanner, res *http.Response, msgChan, sumChan chan string) {
@@ -153,8 +200,8 @@ func streamSplitter(scanner *bufio.Scanner, res *http.Response, msgChan, sumChan
 	}
 }
 
-func chatStream(msg string) (msgChan, sumChan chan string, err error) {
-	res, err := baseRequest(msg, global.Config.Ai.ChatAnywhere.Model)
+func ChatStreamSum(msg string) (msgChan, sumChan chan string, err error) {
+	res, err := baseRequest(msg, global.Config.Ai.ChatAnywhere.Model, true)
 	if err != nil {
 		return
 	}
@@ -171,14 +218,26 @@ func chatStream(msg string) (msgChan, sumChan chan string, err error) {
 }
 
 func ChatStream(msg string) (msgChan chan string, err error) {
-	msgChan, sumChan, err := chatStream(msg)
-	go func() {
-		for range sumChan {
-		} // 丢弃概述
-	}()
-	return msgChan, err
-}
+	res, err := baseRequest(msg, global.Config.Ai.ChatAnywhere.Model, false)
+	if err != nil {
+		return
+	}
 
-func ChatStreamSum(msg string) (msgChan, sumChan chan string, err error) {
-	return chatStream(msg)
+	if res.StatusCode != 200 {
+		if res.StatusCode == 429 {
+			err = errors.New("请求过于频繁，请稍后重试")
+		} else {
+			err = errors.New(fmt.Sprintf("服务器响应错误 %d", res.StatusCode))
+		}
+		return
+	}
+
+	msgChan = make(chan string)
+
+	scanner := bufio.NewScanner(res.Body)
+	scanner.Split(bufio.ScanLines)
+
+	go stream(scanner, res, msgChan)
+
+	return
 }

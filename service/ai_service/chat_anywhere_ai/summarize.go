@@ -14,7 +14,7 @@ import (
 
 // Summarize0 没用了，更耗费 token
 func Summarize0(msg string) (resp string, err error) {
-	res, err := baseRequest(msg, global.Config.Ai.BackendAi.Model)
+	res, err := baseRequest(msg, global.Config.Ai.BackendAi.Model, true)
 	if err != nil {
 		return
 	}
