@@ -35,8 +35,8 @@ func Summarize0(msg string) (resp string, err error) {
 	return aiRes.Choices[0].Message.Content, nil
 }
 
-func ChatWithSummarize(msg string, parentID uint) (msgChan, sumChan chan string, err error) {
-	sendMsg := fmt.Sprintf("¥Q:%s;", msg)
+func PreprocessContext(msg string, parentID uint) (processedMsg string, err error) {
+	processedMsg = fmt.Sprintf("¥Q:%s;", msg)
 	if parentID != 0 {
 		var msgModel models.MessageModel
 		err = global.DB.Find(&msgModel, "id = ?", parentID).Preload("ParentModel").Preload("ParentModel.ParentModel").Error
@@ -55,9 +55,9 @@ func ChatWithSummarize(msg string, parentID uint) (msgChan, sumChan chan string,
 				a3 = msgModel.ParentModel.ParentModel.Answer
 			}
 		}
-		sendMsg = fmt.Sprintf("¥H:%s;¥3Q:%s;¥3A:%s;¥2Q:%s;¥2A:%s;¥1Q:%s;¥1A:%s;¥Q:%s;",
+		processedMsg = fmt.Sprintf("¥H:%s;¥3Q:%s;¥3A:%s;¥2Q:%s;¥2A:%s;¥1Q:%s;¥1A:%s;¥Q:%s;",
 			msgModel.Summary, q3, a3, q2, a2, q1, a1, msg,
 		)
 	}
-	return ChatStreamSum(sendMsg)
+	return
 }

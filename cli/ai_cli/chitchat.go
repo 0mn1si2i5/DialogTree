@@ -4,6 +4,7 @@ package ai_cli
 
 import (
 	"context"
+	"dialogTree/common/cres"
 	"dialogTree/service/ai_service/chat_anywhere_ai"
 	"fmt"
 
@@ -17,14 +18,14 @@ func Chitchat(ctx context.Context, c *cli.Command) error {
 	}
 
 	for {
-		fmt.Print("你：")
+		cres.Prompt()
 		var input string
 		_, err := fmt.Scanln(&input)
 		if err != nil || input == "exit" {
-			fmt.Println("退出对话。")
+			cres.ExitChat()
 			break
 		}
-		// 这里可以调用 AI 回复
+
 		err = chat(input)
 		if err != nil {
 			return err
@@ -34,19 +35,16 @@ func Chitchat(ctx context.Context, c *cli.Command) error {
 }
 
 func chat(input string) error {
-	//text := c.String("text")
-	//if text == "" && c.Args().Len() > 0 {
-	//	text = c.Args().First()
-	//}
-	// 响应
-	fmt.Printf("🤖 Agent: ")
-	mChan, sChan, err := chat_anywhere_ai.ChatWithSummarize(input, 0) // todo parent
+	cres.AvatarOnly()
+	msg, err := chat_anywhere_ai.PreprocessContext(input, 0) // todo parent
 	if err != nil {
 		return err
 	}
-	for m := range mChan {
-		fmt.Print(m)
+	mChan, sChan, err := chat_anywhere_ai.ChatStreamSum(msg)
+	if err != nil {
+		return err
 	}
+	cres.Stream(mChan)
 
 	var summary string
 	for s := range sChan {

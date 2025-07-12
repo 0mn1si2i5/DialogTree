@@ -140,7 +140,9 @@ func streamSplitter(scanner *bufio.Scanner, res *http.Response, msgChan, sumChan
 				summary := msgs[1]
 				sumChan <- summary // ✅ 会阻塞等待消费
 			} else {
-				logrus.Warn("未能正确提取摘要")
+				logrus.Warn("\n未能正确提取摘要")
+				close(msgChan)
+				return
 			}
 
 			fmt.Println("\n完整消息：", wholeMsg)

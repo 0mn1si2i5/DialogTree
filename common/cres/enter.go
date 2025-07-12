@@ -54,3 +54,7 @@ func Stream(msgChan chan string) {
 	}
 	fmt.Println()
 }
+
+func ExitChat() {
+	output("exit", "本次会话结束，再见！", true)
+}
