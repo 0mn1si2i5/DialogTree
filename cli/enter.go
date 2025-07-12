@@ -5,6 +5,7 @@ package cliapp
 import (
 	"dialogTree/cli/ai_cli"
 	"dialogTree/cli/db_cli"
+	"dialogTree/cli/web_cli"
 
 	"github.com/urfave/cli/v3"
 )
@@ -16,6 +17,7 @@ var App = &cli.Command{
 		ai_cli.ChitchatCommand,
 		ai_cli.DialogCommand,
 		db_cli.MigrateDBCommand,
+		web_cli.WebUICommand,
 	},
 	Action: Default(),
 }

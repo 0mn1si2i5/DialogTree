@@ -5,6 +5,7 @@ package cliapp
 import (
 	"bufio"
 	"context"
+	"dialogTree/common/cres"
 	"fmt"
 	"github.com/urfave/cli/v3"
 	"io"
@@ -30,7 +31,7 @@ func Default() func(ctx context.Context, cmd *cli.Command) error {
 			args := cmd.Args().Slice()
 			if len(args) == 0 {
 				// 3️⃣ 没有参数，也没有管道输入：给用户提示
-				fmt.Println("🤖 Enter prompt:")
+				cres.Prompt()
 				scanner := bufio.NewScanner(os.Stdin)
 				if scanner.Scan() {
 					input = scanner.Text()
@@ -47,7 +48,7 @@ func Default() func(ctx context.Context, cmd *cli.Command) error {
 		}
 
 		// 模拟 GPT 响应
-		fmt.Printf("🤖 GPT: [Chitchat] You said: %s\n", input)
+		cres.Output(fmt.Sprintf("You said: %s", input))
 		return nil
 	}
 }

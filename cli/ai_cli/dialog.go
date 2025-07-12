@@ -4,6 +4,7 @@ package ai_cli
 
 import (
 	"context"
+	"dialogTree/core"
 	"dialogTree/flag"
 	"fmt"
 	"strconv"
@@ -39,6 +40,8 @@ var DialogCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, c *cli.Command) error {
+		fmt.Println("=== 进入 dialog 模式 ===")
+		core.CoreInit()
 		if c.Args().Len() == 0 && len(c.FlagNames()) == 0 {
 			return enterRecent(ctx, c)
 		}
