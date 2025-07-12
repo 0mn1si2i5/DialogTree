@@ -16,7 +16,7 @@ import (
 //}
 
 func CoreInit() {
-	InitLogrus()               // 初始化日志文件
-	global.DB = InitDB()       // 连接 mysql
-	global.Redis = InitRedis() // 连接 redis
+	InitLogrus()                    // 初始化日志文件
+	global.DB = InitDB()            // 连接 mysql
+	global.Redis = InitRedis(false) // 连接 redis
 }

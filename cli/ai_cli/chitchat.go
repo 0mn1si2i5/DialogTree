@@ -3,15 +3,20 @@
 package ai_cli
 
 import (
-	"context"
 	"dialogTree/common/cres"
 	"dialogTree/service/ai_service/chat_anywhere_ai"
+	"dialogTree/service/redis_service"
 	"fmt"
+	"github.com/google/uuid"
+	"strconv"
+	"time"
 
 	"github.com/urfave/cli/v3"
 )
 
-func Chitchat(ctx context.Context, c *cli.Command) error {
+func Chitchat(c *cli.Command) error {
+	key := uuid.New().String()
+
 	text := c.String("text")
 	if text == "" && c.Args().Len() > 0 {
 		text = c.Args().First()
@@ -22,11 +27,12 @@ func Chitchat(ctx context.Context, c *cli.Command) error {
 		var input string
 		_, err := fmt.Scanln(&input)
 		if err != nil || input == "exit" {
+			redis_service.DelChitChat(key)
 			cres.ExitChat()
 			break
 		}
 
-		err = chat(input)
+		err = chat(input, key)
 		if err != nil {
 			return err
 		}
@@ -34,9 +40,10 @@ func Chitchat(ctx context.Context, c *cli.Command) error {
 	return nil
 }
 
-func chat(input string) error {
+func chat(input, key string) error {
+	field := strconv.Itoa(int(time.Now().Unix()))
 	cres.AvatarOnly()
-	msg, err := chat_anywhere_ai.PreprocessContext(input, 0) // todo parent
+	msg, err := chat_anywhere_ai.PreprocessFromRedis(input, key)
 	if err != nil {
 		return err
 	}
@@ -44,14 +51,13 @@ func chat(input string) error {
 	if err != nil {
 		return err
 	}
-	cres.Stream(mChan)
+	record := cres.Stream(mChan)
 
 	var summary string
 	for s := range sChan {
-		fmt.Println(s)
 		summary += s
 	}
-	fmt.Println("summary done: ", summary)
-
+	cres.Debug("概要：" + summary)
+	redis_service.CacheChitChat(key, field, input, record, summary)
 	return nil
 }

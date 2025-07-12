@@ -3,11 +3,14 @@
 package chat_anywhere_ai
 
 import (
+	"dialogTree/common/cres"
 	"dialogTree/global"
 	"dialogTree/models"
+	"dialogTree/service/redis_service"
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 
 	"github.com/sirupsen/logrus"
 )
@@ -35,7 +38,7 @@ func Summarize0(msg string) (resp string, err error) {
 	return aiRes.Choices[0].Message.Content, nil
 }
 
-func PreprocessContext(msg string, parentID uint) (processedMsg string, err error) {
+func PreprocessFromSQL(msg string, parentID uint) (processedMsg string, err error) {
 	processedMsg = fmt.Sprintf("¥Q:%s;", msg)
 	if parentID != 0 {
 		var msgModel models.MessageModel
@@ -58,6 +61,30 @@ func PreprocessContext(msg string, parentID uint) (processedMsg string, err erro
 		processedMsg = fmt.Sprintf("¥H:%s;¥3Q:%s;¥3A:%s;¥2Q:%s;¥2A:%s;¥1Q:%s;¥1A:%s;¥Q:%s;",
 			msgModel.Summary, q3, a3, q2, a2, q1, a1, msg,
 		)
+	}
+	return
+}
+
+func PreprocessFromRedis(msg, key string) (processedMsg string, err error) {
+	pmap, amap, summary := redis_service.GetChitChat(key)
+	processedMsg += fmt.Sprintf("¥H:%s;", summary)
+	prompts, answers := sortMap(pmap), sortMap(amap)
+	for i := range prompts {
+		processedMsg += fmt.Sprintf("¥%dQ:%s;¥%dA:%s;", len(prompts)-i, prompts[i], len(prompts)-i, answers[i])
+	}
+	processedMsg += fmt.Sprintf("¥Q:%s;", msg)
+	cres.Debug("\n" + processedMsg + "\n")
+	return
+}
+
+func sortMap(m map[string]string) (values []string) {
+	var keys []string
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		values = append(values, m[k])
 	}
 	return
 }

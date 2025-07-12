@@ -8,7 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func InitRedis() *redis.Client {
+func InitRedis(quiet bool) *redis.Client {
 	r := global.Config.Redis
 	redisDB := redis.NewClient(&redis.Options{
 		Addr:     r.Addr,     // 不写默认就是这个
@@ -19,7 +19,8 @@ func InitRedis() *redis.Client {
 	if err != nil {
 		logrus.Fatalln("redis connection error: ", err)
 	}
-	logrus.Infof("Redis [%s] connection successful", global.Config.Redis.Addr)
-
+	if !quiet {
+		logrus.Infof("Redis [%s] connection successful", global.Config.Redis.Addr)
+	}
 	return redisDB
 }

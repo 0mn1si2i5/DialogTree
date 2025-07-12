@@ -4,6 +4,7 @@ package chat_anywhere_ai
 
 import (
 	"bufio"
+	"dialogTree/common/cres"
 	"dialogTree/global"
 	"encoding/json"
 	"errors"
@@ -144,8 +145,7 @@ func streamSplitter(scanner *bufio.Scanner, res *http.Response, msgChan, sumChan
 				close(msgChan)
 				return
 			}
-
-			fmt.Println("\n完整消息：", wholeMsg)
+			cres.Debug("完整消息：" + wholeMsg)
 
 			_, ok := <-msgChan
 			if ok {

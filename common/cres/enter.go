@@ -48,13 +48,21 @@ func ErrorMsg(msg string) {
 	output(" error", msg, true)
 }
 
-func Stream(msgChan chan string) {
-	for msg := range msgChan {
-		fmt.Print(msg)
+func Stream(msgChan chan string) (record string) {
+	for s := range msgChan {
+		fmt.Print(s)
+		record += s
 	}
 	fmt.Println()
+	return
 }
 
 func ExitChat() {
 	output("exit", "本次会话结束，再见！", true)
+}
+
+func Debug(msg string) {
+	if global.Config.System.Mode == "debug" {
+		output("debug", msg, true)
+	}
 }

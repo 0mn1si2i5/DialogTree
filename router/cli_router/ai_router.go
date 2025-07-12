@@ -5,9 +5,10 @@ package cli_router
 import (
 	"context"
 	"dialogTree/cli/ai_cli"
+	"dialogTree/common/cres"
 	"dialogTree/core"
 	"dialogTree/flag"
-	"fmt"
+	"dialogTree/global"
 	"github.com/urfave/cli/v3"
 )
 
@@ -22,7 +23,12 @@ var ChitchatCommand = &cli.Command{
 			Usage:   "Text prompt to send",
 		},
 	},
-	Action: ai_cli.Chitchat,
+	Action: func(ctx context.Context, c *cli.Command) (err error) {
+		cres.Debug("=== 进入 chitchat 模式 ===")
+		global.Redis = core.InitRedis(true)
+		err = ai_cli.Chitchat(c)
+		return
+	},
 }
 
 var DialogCommand = &cli.Command{
@@ -53,7 +59,7 @@ var DialogCommand = &cli.Command{
 		},
 	},
 	Action: func(ctx context.Context, c *cli.Command) error {
-		fmt.Println("=== 进入 dialog 模式 ===")
+		cres.Debug("=== 进入 dialog 模式 ===")
 		core.CoreInit()
 		if c.Args().Len() == 0 && len(c.FlagNames()) == 0 {
 			return ai_cli.EnterRecent(ctx, c)
