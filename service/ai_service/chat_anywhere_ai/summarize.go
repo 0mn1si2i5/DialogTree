@@ -5,7 +5,6 @@ package chat_anywhere_ai
 import (
 	"dialogTree/common/cres"
 	"dialogTree/global"
-	"dialogTree/models"
 	"dialogTree/service/redis_service"
 	"encoding/json"
 	"fmt"
@@ -38,32 +37,32 @@ func Summarize0(msg string) (resp string, err error) {
 	return aiRes.Choices[0].Message.Content, nil
 }
 
-func PreprocessFromSQL(msg string, parentID uint) (processedMsg string, err error) {
-	processedMsg = fmt.Sprintf("¥Q:%s;", msg)
-	if parentID != 0 {
-		var msgModel models.MessageModel
-		err = global.DB.Find(&msgModel, "id = ?", parentID).Preload("ParentModel").Preload("ParentModel.ParentModel").Error
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		var q3, a3, q2, a2, q1, a1 string
-		q1, a1 = msgModel.Prompt, msgModel.Answer
-		if msgModel.ParentModel != nil {
-			q2 = msgModel.ParentModel.Prompt
-			a2 = msgModel.ParentModel.Answer
-
-			if msgModel.ParentModel.ParentModel != nil {
-				q3 = msgModel.ParentModel.ParentModel.Prompt
-				a3 = msgModel.ParentModel.ParentModel.Answer
-			}
-		}
-		processedMsg = fmt.Sprintf("¥H:%s;¥3Q:%s;¥3A:%s;¥2Q:%s;¥2A:%s;¥1Q:%s;¥1A:%s;¥Q:%s;",
-			msgModel.Summary, q3, a3, q2, a2, q1, a1, msg,
-		)
-	}
-	return
-}
+//func PreprocessFromSQL(msg string, parentID uint) (processedMsg string, err error) {
+//	processedMsg = fmt.Sprintf("¥Q:%s;", msg)
+//	if parentID != 0 {
+//		var msgModel models.MessageModel
+//		err = global.DB.Find(&msgModel, "id = ?", parentID).Preload("ParentModel").Preload("ParentModel.ParentModel").Error
+//		if err != nil {
+//			fmt.Println(err)
+//			return
+//		}
+//		var q3, a3, q2, a2, q1, a1 string
+//		q1, a1 = msgModel.Prompt, msgModel.Answer
+//		if msgModel.ParentModel != nil {
+//			q2 = msgModel.ParentModel.Prompt
+//			a2 = msgModel.ParentModel.Answer
+//
+//			if msgModel.ParentModel.ParentModel != nil {
+//				q3 = msgModel.ParentModel.ParentModel.Prompt
+//				a3 = msgModel.ParentModel.ParentModel.Answer
+//			}
+//		}
+//		processedMsg = fmt.Sprintf("¥H:%s;¥3Q:%s;¥3A:%s;¥2Q:%s;¥2A:%s;¥1Q:%s;¥1A:%s;¥Q:%s;",
+//			msgModel.Summary, q3, a3, q2, a2, q1, a1, msg,
+//		)
+//	}
+//	return
+//}
 
 func PreprocessFromRedis(msg, key string) (processedMsg string, err error) {
 	pmap, amap, summary := redis_service.GetChitChat(key)

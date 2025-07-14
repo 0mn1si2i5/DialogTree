@@ -4,8 +4,9 @@ package core
 
 import (
 	"dialogTree/global"
+	"fmt"
 	"github.com/sirupsen/logrus"
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"strings"
 	"time"
@@ -14,9 +15,9 @@ import (
 func InitDB() (db *gorm.DB) {
 	gdb := global.Config.DB
 
-	db, err := gorm.Open(mysql.Open(gdb.DSN()), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(gdb.DSN()), &gorm.Config{})
 	if err != nil {
-		if strings.Contains(err.Error(), "Unknown database") {
+		if strings.Contains(err.Error(), "does not exist") {
 			db = createDB()
 		} else {
 			logrus.Fatalln("DB open error: ", err)
@@ -33,20 +34,26 @@ func InitDB() (db *gorm.DB) {
 }
 
 func createDB() *gorm.DB {
-	// 创建数据库
 	gdb := global.Config.DB
-	db, err := gorm.Open(mysql.Open(gdb.DSNWithoutDB()), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(gdb.DSNWithoutDB()), &gorm.Config{})
 	if err != nil {
 		logrus.Fatalln("DB open error: ", err)
 	}
 
-	dbName := global.Config.DB.DBname
-	createDBSQL := "CREATE DATABASE IF NOT EXISTS " + dbName + " DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;"
+	dbName := gdb.DBname
+	createDBSQL := fmt.Sprintf("CREATE DATABASE %s WITH ENCODING 'UTF8';", dbName)
+
 	if err := db.Exec(createDBSQL).Error; err != nil {
 		logrus.Fatalln("Create database error: ", err.Error())
-		return nil
 	}
+
 	logrus.Infoln("Database created: ", dbName)
-	db.Exec("USE " + dbName + ";")
+
+	// ✅ PostgreSQL 不支持 USE，要重新连接
+	db, err = gorm.Open(postgres.Open(gdb.DSN()), &gorm.Config{})
+	if err != nil {
+		logrus.Fatalln("Reconnect error: ", err)
+	}
+
 	return db
 }

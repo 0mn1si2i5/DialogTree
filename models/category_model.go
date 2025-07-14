@@ -7,5 +7,5 @@ type CategoryModel struct {
 	Name string `gorm:"not null;uniqueIndex:idx_uniq_category_name;size:32" json:"name"`
 
 	// FK
-	Dialogs []DialogModel `gorm:"foreignKey:CategoryID;references:ID" json:"-"`
+	Sessions []SessionModel `gorm:"foreignKey:CategoryID;references:ID" json:"-"`
 }

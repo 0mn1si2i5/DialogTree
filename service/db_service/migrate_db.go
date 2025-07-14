@@ -12,8 +12,9 @@ func MigrateDB() {
 	// 表迁移
 	err := global.DB.AutoMigrate(
 		&models.CategoryModel{},
+		&models.SessionModel{},
 		&models.DialogModel{},
-		&models.MessageModel{},
+		&models.ConversationModel{},
 		&models.ImageModel{},
 	)
 	if err != nil {

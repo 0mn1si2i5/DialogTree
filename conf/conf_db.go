@@ -18,7 +18,12 @@ type DB struct {
 }
 
 func dsn(db DB, dbName string) string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=true&loc=Local", db.User, db.Password, db.Host, db.Port, dbName)
+	if db.Source == "mysql" {
+		return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=true&loc=Local", db.User, db.Password, db.Host, db.Port, dbName)
+	} else if db.Source == "pgsql" {
+		return fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=disable", db.User, db.Password, db.Host, db.Port, dbName)
+	}
+	return "unsupported db source"
 }
 
 func (db DB) DSN() string {
@@ -26,5 +31,5 @@ func (db DB) DSN() string {
 }
 
 func (db DB) DSNWithoutDB() string {
-	return dsn(db, "")
+	return dsn(db, "postgres")
 }

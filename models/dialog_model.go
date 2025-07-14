@@ -4,11 +4,12 @@ package models
 
 type DialogModel struct {
 	Model
-	Abstract      string `gorm:"size:256" json:"abstract"`
-	CategoryID    uint   `json:"categoryID"`
-	RootMessageID *uint  `gorm:"unique" json:"rootMessageID"`
+	SessionID int64  `gorm:"index"`
+	ParentID  *int64 `gorm:"index"` // 对话之间的树状关系
 
 	// fk
-	RootMessageModel *MessageModel  `gorm:"foreignKey:RootMessageID;references:ID" json:"-"`
-	CategoryModel    *CategoryModel `gorm:"foreignKey:CategoryID;references:ID" json:"-"`
+	SessionModel       SessionModel         `gorm:"foreignKey:SessionID;references:ID" json:"-"`
+	ParentModel        *DialogModel         `gorm:"foreignKey:ParentID;references:ID" json:"-"`
+	ChildrenModels     []*DialogModel       `gorm:"foreignKey:ParentID;references:ID" json:"-"`
+	ConversationModels []*ConversationModel `gorm:"foreignKey:DialogID;references:ID" json:"-"`
 }
