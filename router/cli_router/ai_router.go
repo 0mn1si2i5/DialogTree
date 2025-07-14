@@ -39,21 +39,21 @@ var DialogCommand = &cli.Command{
 		{
 			Name:    "list",
 			Aliases: []string{"l", "ls", "li", "show"},
-			Usage:   "Show all the dialogs",
+			Usage:   "Show all the sessions",
 			Flags:   flag.DialogFlag, // 这里可以只用需要的 flag
 			Action:  ai_cli.ShowDialogs,
 		},
 		{
 			Name:    "enter",
 			Aliases: []string{"e", "en", "i", "in"},
-			Usage:   "Enter a certain dialog",
+			Usage:   "Enter a certain dialog session",
 			Flags:   flag.DialogFlag, // 这里也可以用同一组 flag
 			Action:  ai_cli.EnterDialog,
 		},
 		{
 			Name:    "recent",
 			Aliases: []string{"r", "re", "c", "ch"},
-			Usage:   "Enter the most recent dialog",
+			Usage:   "Enter the most recent dialog session",
 			Flags:   flag.DialogFlag,
 			Action:  ai_cli.EnterRecent,
 		},

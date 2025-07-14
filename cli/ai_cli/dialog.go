@@ -4,6 +4,8 @@ package ai_cli
 
 import (
 	"context"
+	"dialogTree/core"
+	"dialogTree/service/tea_service"
 	"fmt"
 	"strconv"
 
@@ -12,26 +14,15 @@ import (
 
 func ShowDialogs(ctx context.Context, c *cli.Command) error {
 	// 1. 假设 dialogs 是你查出来的对话列表
-	dialogs := []string{"对话1", "对话2", "对话3"}
-	fmt.Println("请选择一个对话：")
-	for i, d := range dialogs {
-		fmt.Printf("%d. %s\n", i+1, d)
+	core.CoreInit()
+	p, err := tea_service.ShowAllSessions()
+	if err != nil {
+		return err
 	}
-
-	// 2. 阻塞等待用户输入
-	fmt.Print("输入编号：")
-	var choice int
-	_, err := fmt.Scanln(&choice)
-	if err != nil || choice < 1 || choice > len(dialogs) {
-		fmt.Println("输入无效")
-		return nil
+	if _, err := p.Run(); err != nil {
+		return err
 	}
-
-	// 3. 根据选择处理
-	selected := dialogs[choice-1]
-	fmt.Printf("你选择了：%s\n", selected)
-	// 这里可以进入后续对话逻辑，比如进入 chat 模式
-	return Enter(selected)
+	return nil
 }
 
 func Enter(dialog string) error {

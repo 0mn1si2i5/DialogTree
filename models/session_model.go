@@ -4,6 +4,7 @@ package models
 
 type SessionModel struct {
 	Model
+	Tittle       string `gorm:"size:64" json:"tittle"`
 	Summary      string `gorm:"size:256" json:"summary"`
 	CategoryID   int64  `json:"categoryID"`
 	RootDialogID *int64 `json:"rootDialogID"`
