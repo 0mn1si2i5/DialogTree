@@ -203,6 +203,33 @@ func streamSplitter(scanner *bufio.Scanner, res *http.Response, msgChan, sumChan
 }
 
 func ChatStreamSum(msg string) (msgChan, sumChan chan string, err error) {
+	// 检查AI配置密钥，如果为空则返回模拟响应
+	if global.Config.Ai.ChatAnywhere.SecretKey == "" {
+		logrus.Info("AI密钥为空，返回模拟响应用于测试")
+		
+		msgChan = make(chan string)
+		sumChan = make(chan string)
+		
+		// 启动goroutine发送模拟响应
+		go func() {
+			// 模拟AI回答
+			mockAnswer := "这是一个模拟的AI回答，用于测试分叉功能。"
+			for _, char := range mockAnswer {
+				msgChan <- string(char)
+			}
+			
+			// 关闭msgChan，模拟消息结束
+			close(msgChan)
+			
+			// 模拟摘要JSON
+			mockSummary := `{"title": "测试对话", "summary": "这是一个测试摘要"}`
+			sumChan <- mockSummary
+			close(sumChan)
+		}()
+		
+		return
+	}
+
 	res, err := baseRequest(msg, global.Config.Ai.ChatAnywhere.Model, true)
 	if err != nil {
 		return
