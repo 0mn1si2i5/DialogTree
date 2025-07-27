@@ -13,7 +13,7 @@ func FlagDB() {
 	err := global.DB.AutoMigrate(
 		&models.CategoryModel{},
 		&models.DialogModel{},
-		&models.MessageModel{},
+		&models.ConversationModel{},
 		&models.ImageModel{},
 	)
 	if err != nil {

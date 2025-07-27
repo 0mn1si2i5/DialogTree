@@ -1,4 +1,3 @@
-
 package session_api
 
 import (
@@ -6,6 +5,7 @@ import (
 	"dialogTree/global"
 	"dialogTree/models"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -65,10 +65,14 @@ func TestCreateSession(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var response map[string]map[string]interface{}
+		//var response map[string]map[string]any
+		var response map[string]any
+		fmt.Println(w.Body.String())
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
-		assert.Equal(t, "Test Session", response["data"]["title"])
+		assert.Equal(t, float64(0), response["code"].(float64))
+		assert.Equal(t, "Test Session", response["data"].(map[string]any)["title"])
+		assert.Equal(t, "创建成功", response["msg"])
 	})
 
 	// Test case: Missing title
