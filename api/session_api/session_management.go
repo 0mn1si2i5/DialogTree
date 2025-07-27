@@ -143,14 +143,44 @@ func (SessionApi) DeleteSession(c *gin.Context) {
 		return
 	}
 
-	// 由于设置了级联删除，删除 session 会自动删除相关的 dialog 和 conversation
-	err = global.DB.Delete(&models.SessionModel{}, sessionId).Error
+	err = deleteSessionTransaction(sessionId)
 	if err != nil {
 		res.Fail(err, "删除会话失败", c)
 		return
 	}
 
 	res.OkWithMessage("删除成功", c)
+}
+
+func deleteSessionTransaction(sessionID int64) error {
+	// 开始事务
+	tx := global.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 删除对话（ConversationModel）
+	if err := tx.Delete(&models.ConversationModel{}, "session_id = ?", sessionID).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 删除对话树（DialogModel）
+	if err := tx.Delete(&models.DialogModel{}, "session_id = ?", sessionID).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 删除会话（SessionModel）
+	if err := tx.Delete(&models.SessionModel{}, "id = ?", sessionID).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 提交事务
+	return tx.Commit().Error
 }
 
 // 构建对话树的辅助函数
