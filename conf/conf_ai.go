@@ -3,12 +3,14 @@
 package conf
 
 type Ai struct {
-	Enable       bool         `yaml:"enable"`
-	Nickname     string       `yaml:"nickname"`
-	Avatar       string       `yaml:"avatar"`
-	Abstract     string       `yaml:"abstract"`
-	ChatAnywhere ChatAnywhere `yaml:"chatAnywhere"`
-	BackendAi    BackendAi    `yaml:"backendAi"`
+	Enable         bool         `yaml:"enable"`
+	Nickname       string       `yaml:"nickname"`
+	Avatar         string       `yaml:"avatar"`
+	Abstract       string       `yaml:"abstract"`
+	ContextLayers  int          `yaml:"contextLayers"`
+	EmbeddingModel string       `yaml:"embeddingModel"`
+	ChatAnywhere   ChatAnywhere `yaml:"chatAnywhere"`
+	BackendAi      BackendAi    `yaml:"backendAi"`
 }
 
 type ChatAnywhere struct {

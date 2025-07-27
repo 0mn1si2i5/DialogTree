@@ -81,6 +81,19 @@ func FailWithError(err error, c *gin.Context) {
 	FailWithMsg(err.Error(), c)
 }
 
+// 为 API 添加的便捷方法
+func OkWithDetail(data any, msg string, c *gin.Context) {
+	Success(data, msg, c)
+}
+
+func OkWithMessage(msg string, c *gin.Context) {
+	SuccessWithMsg(msg, c)
+}
+
+func FailWithMessage(msg string, c *gin.Context) {
+	FailWithMsg(msg, c)
+}
+
 func WithList(list any, total, success int, c *gin.Context) {
 	Response{FailServiceCode,
 		map[string]any{

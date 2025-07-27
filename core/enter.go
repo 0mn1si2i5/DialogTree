@@ -15,8 +15,20 @@ import (
 //	}
 //}
 
-func CoreInit() {
+func Init() {
 	InitLogrus()                    // 初始化日志文件
 	global.DB = InitDB()            // 连接 mysql
 	global.Redis = InitRedis(false) // 连接 redis
+}
+
+func InitWithVector() {
+	InitLogrus()                    // 初始化日志文件
+	global.DB = InitDB()            // 连接 mysql
+	global.Redis = InitRedis(false) // 连接 redis
+
+	// 初始化向量服务
+	err := InitVector()
+	if err != nil {
+		panic("向量服务初始化失败: " + err.Error())
+	}
 }

@@ -1,4 +1,4 @@
-// Path: ./service/tea_service/list.go
+// Path: ./service/tea_service/session_list.go
 
 package tea_service
 

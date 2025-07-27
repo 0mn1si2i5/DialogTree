@@ -3,12 +3,14 @@
 package gin_router
 
 import (
+	"dialogTree/core"
 	"dialogTree/global"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
 
 func Run() {
+	core.Init()
 	gin.SetMode(global.Config.System.GinMode) // 设置 gin 模式，对应 settings.yaml 中的 gin_mode
 
 	router := gin.Default()

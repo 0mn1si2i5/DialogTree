@@ -41,7 +41,7 @@ var DialogCommand = &cli.Command{
 			Aliases: []string{"l", "ls", "li", "show"},
 			Usage:   "Show all the sessions",
 			Flags:   flag.DialogFlag, // 这里可以只用需要的 flag
-			Action:  ai_cli.ShowDialogs,
+			Action:  ai_cli.EnterDialogUI,
 		},
 		{
 			Name:    "enter",
@@ -60,7 +60,7 @@ var DialogCommand = &cli.Command{
 	},
 	Action: func(ctx context.Context, c *cli.Command) error {
 		cres.Debug("=== 进入 dialog 模式 ===")
-		core.CoreInit()
+		core.Init()
 		if c.Args().Len() == 0 && len(c.FlagNames()) == 0 {
 			return ai_cli.EnterRecent(ctx, c)
 		}

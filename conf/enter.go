@@ -8,4 +8,5 @@ type Config struct {
 	DB     DB     `yaml:"db"`
 	Redis  Redis  `yaml:"redis"`
 	Ai     Ai     `yaml:"ai"`
+	Vector Vector `yaml:"vector"`
 }
