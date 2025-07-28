@@ -156,7 +156,7 @@ func traceParentConversations(dialogID int64, maxLayers int) ([]models.Conversat
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return traceParentConversationsFromConversation(latestConv.ID, maxLayers)
 }
 
@@ -185,7 +185,7 @@ func traceParentConversationsFromConversation(conversationID int64, maxLayers in
 			// 如果找不到父conversation，说明已经到达根节点
 			break
 		}
-		
+
 		currentConversationID = &parentConversation.ID
 	}
 
@@ -209,11 +209,11 @@ func findParentConversation(conv models.ConversationModel) (*models.Conversation
 	// 找到父dialog中的分叉点conversation
 	// 分叉点conversation应该是：创建时间 <= 当前dialog创建时间的最新conversation
 	var parentConversation models.ConversationModel
-	err = global.DB.Where("dialog_id = ? AND created_at <= ?", 
+	err = global.DB.Where("dialog_id = ? AND created_at <= ?",
 		*currentDialog.ParentID, currentDialog.CreatedAt).
 		Order("created_at DESC").
 		First(&parentConversation).Error
-	
+
 	if err != nil {
 		if err.Error() == "record not found" {
 			// 如果找不到合适的conversation，尝试找父dialog的最新conversation
@@ -264,14 +264,22 @@ func buildLongTermContext(sessionID int64, currentQuestion string) (string, erro
 	// 3. 构建长期记忆上下文
 	var contextLines []string
 	for _, result := range results {
-		// 从元数据中提取信息
-		if prompt, ok := result.Metadata["prompt"].(string); ok {
-			if summary, ok := result.Metadata["summary"].(string); ok {
-				contextLines = append(contextLines, fmt.Sprintf("历史相关问题: %s", prompt))
-				contextLines = append(contextLines, fmt.Sprintf("回答要点: %s", summary))
-				contextLines = append(contextLines, "---")
-			}
+		// 从向量数据库元数据中获取 conversation_id
+		conversationID := result.ID // result.ID 已经是 uint64 类型的 conversation_id
+
+		// 从主数据库中查询对应的 ConversationModel
+		var conversation models.ConversationModel
+		err := global.DB.First(&conversation, conversationID).Error
+		if err != nil {
+			// 如果找不到对应的 conversation，记录错误并跳过
+			fmt.Printf("Warning: Conversation with ID %d not found in DB: %v\n", conversationID, err)
+			continue
 		}
+
+		// 使用从数据库中获取的 prompt 和 summary
+		contextLines = append(contextLines, fmt.Sprintf("历史相关问题: %s", conversation.Prompt))
+		contextLines = append(contextLines, fmt.Sprintf("回答要点: %s", conversation.Summary))
+		contextLines = append(contextLines, "---")
 	}
 
 	if len(contextLines) == 0 {
@@ -305,16 +313,10 @@ func StoreConversationVector(conversationID int64, prompt, answer, summary strin
 		"conversation_id": conversationID,
 		"session_id":      conversation.SessionID,
 		"dialog_id":       conversation.DialogID,
-		"prompt":          prompt,
-		"answer":          answer,
-		"summary":         summary,
-		"title":           conversation.Title,
-		"created_at":      conversation.CreatedAt.Unix(),
 	}
 
-	// 4. 存储到向量数据库
-	vectorID := fmt.Sprintf("conv_%d", conversationID)
-	err = vector_service.VectorServiceInstance.Store(vectorID, questionVector, metadata)
+	// 4. 存储到向量数据库，ID使用uint64类型
+	err = vector_service.VectorServiceInstance.Store(uint64(conversationID), questionVector, metadata)
 	if err != nil {
 		return fmt.Errorf("向量存储失败: %v", err)
 	}
@@ -328,8 +330,7 @@ func DeleteConversationVector(conversationID int64) error {
 		return nil
 	}
 
-	vectorID := fmt.Sprintf("conv_%d", conversationID)
-	return vector_service.VectorServiceInstance.Delete(vectorID)
+	return vector_service.VectorServiceInstance.Delete(uint64(conversationID))
 }
 
 // DeleteSessionVectors 删除整个会话的所有向量
@@ -347,11 +348,10 @@ func DeleteSessionVectors(sessionID int64) error {
 
 	// 逐一删除向量
 	for _, conv := range conversations {
-		vectorID := fmt.Sprintf("conv_%d", conv.ID)
-		err := vector_service.VectorServiceInstance.Delete(vectorID)
+		err := vector_service.VectorServiceInstance.Delete(uint64(conv.ID))
 		if err != nil {
 			// 记录错误但继续删除其他向量
-			fmt.Printf("删除向量失败 %s: %v\n", vectorID, err)
+			fmt.Printf("删除向量失败 %d: %v\n", conv.ID, err)
 		}
 	}
 
@@ -418,7 +418,7 @@ func BuildDialogContextFromConversation(sessionID int64, parentConversationID *i
 		conv := recentConversations[i]
 		contextData.Recent = append(contextData.Recent, QAPair{
 			Q: conv.Prompt,
-			A: conv.Summary, // 使用摘要而非完整回答
+			A: conv.Answer, // 使用摘要而非完整回答
 		})
 	}
 
@@ -485,15 +485,22 @@ func getLongTermContextConversations(sessionID int64, currentQuestion string) ([
 	// 3. 构建历史对话QAPair列表
 	var historyPairs []QAPair
 	for _, result := range results {
-		// 从元数据中提取信息
-		if prompt, ok := result.Metadata["prompt"].(string); ok {
-			if summary, ok := result.Metadata["summary"].(string); ok {
-				historyPairs = append(historyPairs, QAPair{
-					Q: prompt,
-					A: summary,
-				})
-			}
+		// 从向量数据库元数据中获取 conversation_id (result.ID 已经是 uint64 类型的 conversation_id)
+		conversationID := result.ID
+
+		// 从主数据库中查询对应的 ConversationModel
+		var conversation models.ConversationModel
+		err := global.DB.First(&conversation, conversationID).Error
+		if err != nil {
+			// 如果找不到对应的 conversation，记录错误并跳过
+			fmt.Printf("Warning: Conversation with ID %d not found in DB for long-term context: %v\n", conversationID, err)
+			continue
 		}
+
+		historyPairs = append(historyPairs, QAPair{
+			Q: conversation.Prompt,
+			A: conversation.Summary,
+		})
 	}
 
 	return historyPairs, nil

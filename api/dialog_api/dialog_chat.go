@@ -6,9 +6,9 @@ import (
 	"dialogTree/common/res"
 	"dialogTree/global"
 	"dialogTree/models"
+	"dialogTree/service/ai_service"
 	"dialogTree/service/ai_service/chat_anywhere"
 	"dialogTree/service/dialog_service"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -57,7 +57,8 @@ func (DialogApi) NewChat(c *gin.Context) {
 	fullMessage := contextJSON
 
 	// 调用AI进行流式对话
-	msgChan, sumChan, err := chat_anywhere.ChatStreamSum(fullMessage)
+	provider := ai_service.GetDefaultProvider()
+	msgChan, sumChan, err := ai_service.ChatStreamSum(fullMessage, provider) // todo
 	if err != nil {
 		res.Fail(err, "AI服务调用失败", c)
 		return
@@ -72,25 +73,33 @@ func (DialogApi) NewChat(c *gin.Context) {
 
 	// 流式响应
 	var fullAnswer strings.Builder
+	var summary string
+	done := make(chan bool)
 
 	go func() {
-		for chunk := range msgChan {
-			fullAnswer.WriteString(chunk)
-			// 发送SSE数据
-			c.SSEvent("message", chunk)
-			c.Writer.Flush()
+		var summaryBuilder strings.Builder
+		for s := range sumChan {
+			summaryBuilder.WriteString(s)
 		}
+		summary = summaryBuilder.String()
+		close(done)
 	}()
 
-	// 等待摘要
-	var summary string
-	for s := range sumChan {
-		summary += s
+	// 在主goroutine中处理消息流，确保c.Writer有效
+	for chunk := range msgChan {
+		fullAnswer.WriteString(chunk)
+		// 发送SSE数据
+		c.SSEvent("message", chunk)
+		c.Writer.Flush()
 	}
+
+	// 等待摘要处理完成
+	<-done
 
 	// 保存对话记录
 	go SaveChatRecord(req, fullAnswer.String(), summary)
 
+	// 最后的Flush确保所有缓冲数据都已发送
 	c.Writer.Flush()
 }
 
@@ -155,17 +164,11 @@ type summarizeType struct {
 
 // SaveChatRecord 保存对话记录的辅助函数
 func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, error) {
-	// 解析AI返回的摘要JSON
-	summaryRaw = extractJSON(summaryRaw)
-
 	var s summarizeType
-	err := json.Unmarshal([]byte(summaryRaw), &s)
-	if err != nil {
-		logrus.Errorf("json unmarshal error: %v, raw: %s", err, summaryRaw)
-		// 如果解析失败，使用默认值
-		s.Title = "对话"
-		s.Summary = req.Content[:min(100, len(req.Content))]
-	}
+	// AI现在返回纯文本摘要，不再需要解析JSON
+	s.Summary = summaryRaw
+	// 标题可以从请求内容中截取，或者设置为默认值
+	s.Title = req.Content[:min(100, len(req.Content))]
 
 	var dialogID int64
 	var isNewSession bool
@@ -176,7 +179,7 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 			SessionID: req.SessionID,
 			ParentID:  nil,
 		}
-		err = global.DB.Create(&dialog).Error
+		err := global.DB.Create(&dialog).Error
 		if err != nil {
 			return nil, fmt.Errorf("创建对话节点失败: %v", err)
 		}
@@ -185,7 +188,7 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 	} else {
 		// 指定了父conversation，需要检查是否分叉
 		parentConv := &models.ConversationModel{}
-		err = global.DB.First(parentConv, *req.ParentConversationID).Error
+		err := global.DB.First(parentConv, *req.ParentConversationID).Error
 		if err != nil {
 			return nil, fmt.Errorf("找不到父conversation: %v", err)
 		}
@@ -221,7 +224,7 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 		Comment:   "",
 	}
 
-	err = global.DB.Create(&conversation).Error
+	err := global.DB.Create(&conversation).Error
 	if err != nil {
 		return nil, fmt.Errorf("创建会话记录失败: %v", err)
 	}
@@ -315,20 +318,6 @@ func (DialogApi) UpdateConversationComment(c *gin.Context) {
 	}
 
 	res.OkWithMessage("评论更新成功", c)
-}
-
-func extractJSON(content string) string {
-	content = strings.TrimSpace(content)
-	if strings.HasPrefix(content, "```json") {
-		content = strings.TrimPrefix(content, "```json")
-	}
-	if strings.HasPrefix(content, "```") {
-		content = strings.TrimPrefix(content, "```")
-	}
-	if strings.HasSuffix(content, "```") {
-		content = strings.TrimSuffix(content, "```")
-	}
-	return strings.TrimSpace(content)
 }
 
 func min(a, b int) int {

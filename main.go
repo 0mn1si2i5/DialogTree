@@ -11,6 +11,7 @@ import (
 
 func main() {
 	global.Config = core.ReadConf(true)
+	core.InitWithVector()
 	cres.SetAgentLabel()
 	cli_router.Run()
 }

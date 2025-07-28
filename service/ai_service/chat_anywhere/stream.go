@@ -9,6 +9,7 @@ import (
 )
 
 func ChatStreamSum(msg string) (msgChan, sumChan chan string, err error) {
+
 	// 检查AI配置密钥，如果为空则返回模拟响应
 	if global.Config.Ai.ChatAnywhere.SecretKey == "" {
 		logrus.Info("AI密钥为空，返回模拟响应用于测试")

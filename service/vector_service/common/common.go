@@ -3,7 +3,8 @@
 package common
 
 type SearchResult struct {
-	ID       string                 `json:"id"`
+	ID       uint64                 `json:"id"`
 	Score    float64                `json:"score"`
 	Metadata map[string]interface{} `json:"metadata"`
+	Vector   []float32              `json:"vector"`
 }
