@@ -4,7 +4,7 @@ package ai_cli
 
 import (
 	"dialogTree/common/cres"
-	"dialogTree/service/ai_service/chat_anywhere_ai"
+	"dialogTree/service/ai_service"
 	"dialogTree/service/redis_service"
 	"fmt"
 	"github.com/google/uuid"
@@ -43,11 +43,12 @@ func Chitchat(c *cli.Command) error {
 func chat(input, key string) error {
 	field := strconv.Itoa(int(time.Now().Unix()))
 	cres.AvatarOnly()
-	msg, err := chat_anywhere_ai.PreprocessFromRedis(input, key)
+	msg, err := ai_service.PreprocessFromRedis(input, key)
 	if err != nil {
 		return err
 	}
-	mChan, sChan, err := chat_anywhere_ai.ChatStreamSum(msg)
+	provider := ai_service.GetDefaultProvider()
+	mChan, sChan, err := ai_service.ChatStreamSum(msg, provider)
 	if err != nil {
 		return err
 	}

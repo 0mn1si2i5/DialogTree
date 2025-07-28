@@ -4,7 +4,7 @@ package chat_anywhere_ai
 
 import (
 	"dialogTree/common/cres"
-	"dialogTree/global"
+	"dialogTree/service/ai_service/common"
 	"dialogTree/service/redis_service"
 	"encoding/json"
 	"fmt"
@@ -16,7 +16,8 @@ import (
 
 // Summarize0 没用了，更耗费 token
 func Summarize0(msg string) (resp string, err error) {
-	res, err := baseRequest(msg, global.Config.Ai.BackendAi.Model, true)
+	config := getConfig()
+	res, err := common.MakeRequest(config, msg, true)
 	if err != nil {
 		return
 	}
@@ -28,7 +29,7 @@ func Summarize0(msg string) (resp string, err error) {
 		return
 	}
 
-	var aiRes AIChatResponse
+	var aiRes common.UniversalChatResponse
 	err = json.Unmarshal(body, &aiRes)
 	if err != nil {
 		logrus.Errorf("响应解析失败 %s\n原始数据 %s", err, string(body))

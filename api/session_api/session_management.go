@@ -143,6 +143,17 @@ func (SessionApi) DeleteSession(c *gin.Context) {
 		return
 	}
 
+	var m models.SessionModel
+	err = global.DB.Find(&m, "id = ?", sessionId).Error
+	if err != nil {
+		res.Fail(err, "查询出错", c)
+		return
+	}
+	if m.ID == 0 {
+		res.FailWithMessage("会话不存在", c)
+		return
+	}
+
 	err = deleteSessionTransaction(sessionId)
 	if err != nil {
 		res.Fail(err, "删除会话失败", c)

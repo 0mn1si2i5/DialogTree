@@ -6,7 +6,7 @@ import (
 	"bufio"
 	"context"
 	"dialogTree/common/cres"
-	"dialogTree/service/ai_service/chat_anywhere_ai"
+	"dialogTree/service/ai_service"
 	"github.com/urfave/cli/v3"
 	"io"
 	"os"
@@ -47,7 +47,8 @@ func OneTimeChat(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	cres.AvatarOnly()
-	msgChan, err := chat_anywhere_ai.ChatStream(input)
+	provider := ai_service.GetDefaultProvider()
+	msgChan, err := ai_service.ChatStream(input, provider)
 	if err != nil {
 		return err
 	}

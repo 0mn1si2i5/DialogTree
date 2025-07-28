@@ -11,6 +11,8 @@ type Ai struct {
 	EmbeddingModel string       `yaml:"embeddingModel"`
 	ChatAnywhere   ChatAnywhere `yaml:"chatAnywhere"`
 	BackendAi      BackendAi    `yaml:"backendAi"`
+	OpenAI         OpenAI       `yaml:"openai"`
+	DeepSeek       DeepSeek     `yaml:"deepseek"`
 }
 
 type ChatAnywhere struct {
@@ -19,6 +21,16 @@ type ChatAnywhere struct {
 }
 
 type BackendAi struct {
+	Model     string `yaml:"model"`
+	SecretKey string `yaml:"secretKey"`
+}
+
+type OpenAI struct {
+	Model     string `yaml:"model"`
+	SecretKey string `yaml:"secretKey"`
+}
+
+type DeepSeek struct {
 	Model     string `yaml:"model"`
 	SecretKey string `yaml:"secretKey"`
 }
