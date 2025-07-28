@@ -87,8 +87,18 @@ func (s *CliDialogService) StartDialogChat(sessionID int64, parentDialogID *int6
 
 // ProcessDialogMessage 处理单条对话消息
 func (s *CliDialogService) ProcessDialogMessage(sessionID int64, parentDialogID *int64, content string) error {
-	// 构建上下文
-	context, err := BuildDialogContext(sessionID, parentDialogID, content)
+	// 构建上下文 - 使用基于conversation的上下文构建（支持分叉场景）
+	var parentConversationID *int64
+	if parentDialogID != nil {
+		// 如果指定了parentDialogID，找到该dialog的最新conversation
+		parentConv, err := FindParentConversation(*parentDialogID)
+		if err != nil {
+			return fmt.Errorf("找不到父conversation: %v", err)
+		}
+		parentConversationID = &parentConv.ID
+	}
+	
+	context, err := BuildDialogContextFromConversation(sessionID, parentConversationID, content)
 	if err != nil {
 		return fmt.Errorf("构建上下文失败: %v", err)
 	}

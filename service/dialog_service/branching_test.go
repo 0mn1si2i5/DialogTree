@@ -6,6 +6,7 @@ import (
 	"dialogTree/global"
 	"dialogTree/models"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -326,5 +327,261 @@ func TestCompleteWorkflow(t *testing.T) {
 			t.Errorf("构建上下文失败: %v", err)
 		}
 		t.Logf("分叉后的上下文: %s", context)
+	})
+}
+
+// TestBranchPointTracing 测试在寻找父conversation过程中遇到branch point的情况
+func TestBranchPointTracing(t *testing.T) {
+	setupTestConfig()
+	db := setupTestDB(t)
+	global.DB = db
+
+	sessionID, rootDialogID, _ := createTestData(t, db)
+
+	// 创建更复杂的分叉场景
+	// Dialog结构:
+	// rootDialog (conv1, conv2, conv3)
+	//   ├── branchDialog1 (conv4, conv5) - 从conv2分叉
+	//   └── branchDialog2 (conv6, conv7) - 从conv2分叉
+	//     └── subBranchDialog (conv8, conv9) - 从conv6分叉
+
+	t.Run("创建复杂分叉结构", func(t *testing.T) {
+		// 创建第一个分叉 - 从conv2分叉
+		conv2ID := int64(2)
+		branch1DialogID, movedDialogID1, err := CreateBranchingDialogs(sessionID, conv2ID, rootDialogID)
+		if err != nil {
+			t.Fatalf("创建第一个分叉失败: %v", err)
+		}
+
+		// 在branch1Dialog中添加两个新conversations
+		conv4 := models.ConversationModel{
+			Prompt:    "问题4",
+			Answer:    "回答4",
+			SessionID: sessionID,
+			DialogID:  branch1DialogID,
+			Title:     "标题4",
+			Summary:   "摘要4",
+			IsStarred: false,
+			Comment:   "",
+		}
+		db.Create(&conv4)
+		
+		conv5 := models.ConversationModel{
+			Prompt:    "问题5",
+			Answer:    "回答5",
+			SessionID: sessionID,
+			DialogID:  branch1DialogID,
+			Title:     "标题5",
+			Summary:   "摘要5",
+			IsStarred: false,
+			Comment:   "",
+		}
+		db.Create(&conv5)
+
+		// 创建第二个分叉 - 也从conv2分叉
+		branch2DialogID, _, err := CreateBranchingDialogs(sessionID, conv2ID, rootDialogID)
+		if err != nil {
+			t.Fatalf("创建第二个分叉失败: %v", err)
+		}
+
+		// 在branch2Dialog中添加两个新conversations
+		conv6 := models.ConversationModel{
+			Prompt:    "问题6",
+			Answer:    "回答6",
+			SessionID: sessionID,
+			DialogID:  branch2DialogID,
+			Title:     "标题6",
+			Summary:   "摘要6",
+			IsStarred: false,
+			Comment:   "",
+		}
+		db.Create(&conv6)
+
+		conv7 := models.ConversationModel{
+			Prompt:    "问题7",
+			Answer:    "回答7",
+			SessionID: sessionID,
+			DialogID:  branch2DialogID,
+			Title:     "标题7",
+			Summary:   "摘要7",
+			IsStarred: false,
+			Comment:   "",
+		}
+		db.Create(&conv7)
+
+		// 创建子分叉 - 从conv6分叉
+		subBranchDialogID, _, err := CreateBranchingDialogs(sessionID, conv6.ID, branch2DialogID)
+		if err != nil {
+			t.Fatalf("创建子分叉失败: %v", err)
+		}
+
+		// 在子分叉中添加两个conversations
+		conv8 := models.ConversationModel{
+			Prompt:    "问题8",
+			Answer:    "回答8",
+			SessionID: sessionID,
+			DialogID:  subBranchDialogID,
+			Title:     "标题8",
+			Summary:   "摘要8",
+			IsStarred: false,
+			Comment:   "",
+		}
+		db.Create(&conv8)
+
+		conv9 := models.ConversationModel{
+			Prompt:    "问题9",
+			Answer:    "回答9",
+			SessionID: sessionID,
+			DialogID:  subBranchDialogID,
+			Title:     "标题9",
+			Summary:   "摘要9",
+			IsStarred: false,
+			Comment:   "",
+		}
+		db.Create(&conv9)
+
+		t.Logf("创建的复杂分叉结构:")
+		t.Logf("  rootDialog: %d", rootDialogID)
+		t.Logf("  branch1Dialog: %d", branch1DialogID)
+		t.Logf("  movedDialog1: %d", movedDialogID1)
+		t.Logf("  branch2Dialog: %d", branch2DialogID)
+		t.Logf("  subBranchDialog: %d", subBranchDialogID)
+
+		// 测试用例1：从子分叉中的conversation追溯父节点
+		t.Run("子分叉conversation追溯父节点", func(t *testing.T) {
+			conversations, err := traceParentConversationsFromConversation(conv9.ID, 5)
+			if err != nil {
+				t.Errorf("追溯父节点失败: %v", err)
+			}
+
+			t.Logf("从conv9追溯到的conversations数量: %d", len(conversations))
+			for i, conv := range conversations {
+				t.Logf("  [%d] Conv%d: %s (DialogID: %d)", i, conv.ID, conv.Prompt, conv.DialogID)
+			}
+
+			// 验证追溯路径中包含的prompt内容
+			if len(conversations) < 3 {  // 至少应该追溯到几个关键节点
+				t.Errorf("追溯路径长度太短，实际%d", len(conversations))
+			}
+			
+			// 验证第一个是conv9
+			if conversations[0].Prompt != "问题9" {
+				t.Errorf("第一个节点应该是问题9，实际是%s", conversations[0].Prompt)
+			}
+		})
+
+		// 测试用例2：从branch1中的conversation追溯父节点
+		t.Run("branch1 conversation追溯父节点", func(t *testing.T) {
+			conversations, err := traceParentConversationsFromConversation(conv5.ID, 4)
+			if err != nil {
+				t.Errorf("追溯父节点失败: %v", err)
+			}
+
+			t.Logf("从conv5追溯到的conversations数量: %d", len(conversations))
+			for i, conv := range conversations {
+				t.Logf("  [%d] Conv%d: %s (DialogID: %d)", i, conv.ID, conv.Prompt, conv.DialogID)
+			}
+
+			// 验证第一个是conv5
+			if len(conversations) == 0 || conversations[0].Prompt != "问题5" {
+				t.Errorf("第一个节点应该是问题5")
+			}
+		})
+
+		// 测试用例3：从branch2中的conversation追溯父节点
+		t.Run("branch2 conversation追溯父节点", func(t *testing.T) {
+			conversations, err := traceParentConversationsFromConversation(conv7.ID, 4)
+			if err != nil {
+				t.Errorf("追溯父节点失败: %v", err)
+			}
+
+			t.Logf("从conv7追溯到的conversations数量: %d", len(conversations))
+			for i, conv := range conversations {
+				t.Logf("  [%d] Conv%d: %s (DialogID: %d)", i, conv.ID, conv.Prompt, conv.DialogID)
+			}
+
+			// 验证第一个是conv7
+			if len(conversations) == 0 || conversations[0].Prompt != "问题7" {
+				t.Errorf("第一个节点应该是问题7")
+			}
+		})
+
+		// 测试用例4：测试findParentConversation函数在分叉点的行为
+		t.Run("findParentConversation在分叉点的行为", func(t *testing.T) {
+			// 找到conv8的父conversation（应该是conv6）
+			parentConv, err := findParentConversation(conv8)
+			if err != nil {
+				t.Errorf("查找父conversation失败: %v", err)
+			}
+
+			t.Logf("Conv8的父conversation: Conv%d (Prompt: %s)", parentConv.ID, parentConv.Prompt)
+
+			// 验证父conversation的内容包含"问题6"
+			if parentConv.Prompt != "问题6" {
+				t.Errorf("父conversation应该是问题6，实际是%s", parentConv.Prompt)
+			}
+		})
+
+		// 测试用例5：测试上下文构建在复杂分叉场景下的正确性
+		t.Run("复杂分叉场景下的上下文构建", func(t *testing.T) {
+			context, err := BuildDialogContextFromConversation(sessionID, &conv9.ID, "新问题")
+			if err != nil {
+				t.Errorf("构建上下文失败: %v", err)
+			}
+
+			t.Logf("从conv9构建的上下文:\n%s", context)
+
+			// 验证上下文中应该包含正确的追溯路径
+			if !strings.Contains(context, "问题1") {
+				t.Error("上下文应该包含问题1")
+			}
+			if !strings.Contains(context, "问题6") {
+				t.Error("上下文应该包含问题6")
+			}
+			if !strings.Contains(context, "问题9") {
+				t.Error("上下文应该包含问题9")
+			}
+
+			// 不应该包含其他分支的内容
+			if strings.Contains(context, "问题4") || strings.Contains(context, "问题5") {
+				t.Error("上下文不应该包含其他分支的内容（问题4或问题5）")
+			}
+		})
+
+		// 测试用例6：验证不同分支的上下文隔离
+		t.Run("验证分支间上下文隔离", func(t *testing.T) {
+			// 测试branch1的上下文
+			context1, err := BuildDialogContextFromConversation(sessionID, &conv5.ID, "新问题")
+			if err != nil {
+				t.Errorf("构建branch1上下文失败: %v", err)
+			}
+
+			// 测试branch2的上下文
+			context2, err := BuildDialogContextFromConversation(sessionID, &conv7.ID, "新问题")
+			if err != nil {
+				t.Errorf("构建branch2上下文失败: %v", err)
+			}
+
+			t.Logf("Branch1上下文:\n%s", context1)
+			t.Logf("Branch2上下文:\n%s", context2)
+
+			// branch1的上下文不应该包含branch2的内容
+			if strings.Contains(context1, "问题6") || strings.Contains(context1, "问题7") {
+				t.Error("Branch1上下文不应该包含Branch2的内容")
+			}
+
+			// branch2的上下文不应该包含branch1的内容
+			if strings.Contains(context2, "问题4") || strings.Contains(context2, "问题5") {
+				t.Error("Branch2上下文不应该包含Branch1的内容")
+			}
+
+			// 两个上下文都应该包含共同的祖先
+			if !strings.Contains(context1, "问题1") {
+				t.Error("Branch1上下文应该包含共同祖先问题1")
+			}
+			if !strings.Contains(context2, "问题1") {
+				t.Error("Branch2上下文应该包含共同祖先问题1")
+			}
+		})
 	})
 }

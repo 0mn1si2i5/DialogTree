@@ -84,6 +84,44 @@ func buildShortTermContext(sessionID int64, parentDialogID *int64) (string, erro
 	return strings.Join(contextLines, "\n"), nil
 }
 
+// buildShortTermContextFromConversation 从指定conversation构建短期记忆上下文
+// 这个函数专门用于分叉场景，能正确处理跨dialog的追溯
+func buildShortTermContextFromConversation(sessionID int64, parentConversationID *int64) (string, error) {
+	contextLayers := global.Config.Ai.ContextLayers
+	if contextLayers <= 0 {
+		return "", nil
+	}
+
+	var conversations []models.ConversationModel
+	var err error
+
+	if parentConversationID == nil {
+		// 如果没有指定父conversation，获取会话中最新的几轮对话（跨Dialog）
+		conversations, err = getRecentConversationsAcrossDialogs(sessionID, contextLayers)
+	} else {
+		// 从指定的conversation开始往上追溯
+		conversations, err = traceParentConversationsFromConversation(*parentConversationID, contextLayers)
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	if len(conversations) == 0 {
+		return "", nil
+	}
+
+	// 按时间正序排列（最早的在前面）
+	var contextLines []string
+	for i := len(conversations) - 1; i >= 0; i-- {
+		conv := conversations[i]
+		contextLines = append(contextLines, fmt.Sprintf("Q: %s", conv.Prompt))
+		contextLines = append(contextLines, fmt.Sprintf("A: %s", conv.Summary)) // 使用摘要而非完整回答
+	}
+
+	return strings.Join(contextLines, "\n"), nil
+}
+
 // getRecentConversationsAcrossDialogs 跨Dialog获取最近的conversations
 func getRecentConversationsAcrossDialogs(sessionID int64, limit int) ([]models.ConversationModel, error) {
 	var conversations []models.ConversationModel
@@ -96,36 +134,87 @@ func getRecentConversationsAcrossDialogs(sessionID int64, limit int) ([]models.C
 
 // traceParentConversations 从指定对话节点往上追溯父节点
 func traceParentConversations(dialogID int64, maxLayers int) ([]models.ConversationModel, error) {
+	// 保持向后兼容：从dialog的最新conversation开始追溯
+	var latestConv models.ConversationModel
+	err := global.DB.Where("dialog_id = ?", dialogID).
+		Order("created_at DESC").
+		First(&latestConv).Error
+	if err != nil {
+		return nil, err
+	}
+	
+	return traceParentConversationsFromConversation(latestConv.ID, maxLayers)
+}
+
+// traceParentConversationsFromConversation 从指定conversation开始往上追溯父节点
+// 这是核心实现，能正确处理分叉路径
+func traceParentConversationsFromConversation(conversationID int64, maxLayers int) ([]models.ConversationModel, error) {
 	var conversations []models.ConversationModel
-	currentDialogID := &dialogID
+	currentConversationID := &conversationID
 
-	for i := 0; i < maxLayers && currentDialogID != nil; i++ {
-		// 获取当前 dialog 的 conversation
+	for i := 0; i < maxLayers && currentConversationID != nil; i++ {
+		// 获取当前conversation
 		var conv models.ConversationModel
-		err := global.DB.Where("dialog_id = ?", *currentDialogID).
-			Order("created_at DESC").
-			First(&conv).Error
-
+		err := global.DB.First(&conv, *currentConversationID).Error
 		if err != nil {
 			if err.Error() == "record not found" {
 				break
 			}
-			return nil, err
+			return nil, fmt.Errorf("获取conversation失败: %v", err)
 		}
 
 		conversations = append(conversations, conv)
 
-		// 获取父 dialog ID
-		var dialog models.DialogModel
-		err = global.DB.First(&dialog, *currentDialogID).Error
+		// 查找父conversation
+		parentConversation, err := findParentConversation(conv)
 		if err != nil {
+			// 如果找不到父conversation，说明已经到达根节点
 			break
 		}
-
-		currentDialogID = dialog.ParentID
+		
+		currentConversationID = &parentConversation.ID
 	}
 
 	return conversations, nil
+}
+
+// findParentConversation 找到指定conversation的父conversation
+func findParentConversation(conv models.ConversationModel) (*models.ConversationModel, error) {
+	// 获取当前conversation所在的dialog
+	var currentDialog models.DialogModel
+	err := global.DB.First(&currentDialog, conv.DialogID).Error
+	if err != nil {
+		return nil, fmt.Errorf("获取dialog失败: %v", err)
+	}
+
+	// 如果当前dialog没有父dialog，说明已经是根节点
+	if currentDialog.ParentID == nil {
+		return nil, fmt.Errorf("已到达根节点")
+	}
+
+	// 找到父dialog中的分叉点conversation
+	// 分叉点conversation应该是：创建时间 <= 当前dialog创建时间的最新conversation
+	var parentConversation models.ConversationModel
+	err = global.DB.Where("dialog_id = ? AND created_at <= ?", 
+		*currentDialog.ParentID, currentDialog.CreatedAt).
+		Order("created_at DESC").
+		First(&parentConversation).Error
+	
+	if err != nil {
+		if err.Error() == "record not found" {
+			// 如果找不到合适的conversation，尝试找父dialog的最新conversation
+			err = global.DB.Where("dialog_id = ?", *currentDialog.ParentID).
+				Order("created_at DESC").
+				First(&parentConversation).Error
+			if err != nil {
+				return nil, fmt.Errorf("找不到父conversation: %v", err)
+			}
+		} else {
+			return nil, fmt.Errorf("查询父conversation失败: %v", err)
+		}
+	}
+
+	return &parentConversation, nil
 }
 
 // buildLongTermContext 构建长期记忆上下文（向量检索）
@@ -296,21 +385,40 @@ func CheckIfBranching(sessionID int64, parentDialogID *int64) (bool, *models.Con
 }
 
 // BuildDialogContextFromConversation 根据conversation ID构建对话上下文
+// 这个函数能正确处理分叉场景下的上下文追溯
 func BuildDialogContextFromConversation(sessionID int64, parentConversationID *int64, currentQuestion string) (string, error) {
-	if parentConversationID == nil {
-		// 没有指定父conversation，使用原有逻辑获取最新对话
-		return BuildDialogContext(sessionID, nil, currentQuestion)
-	}
+	var contextParts []string
 
-	// 获取父conversation所在的dialog
-	var parentConv models.ConversationModel
-	err := global.DB.First(&parentConv, *parentConversationID).Error
+	// 1. 构建短期记忆上下文（从指定conversation往上追溯）
+	shortTermContext, err := buildShortTermContextFromConversation(sessionID, parentConversationID)
 	if err != nil {
-		return "", fmt.Errorf("找不到父conversation: %v", err)
+		return "", fmt.Errorf("构建短期上下文失败: %v", err)
 	}
 
-	// 使用父conversation所在的dialog构建上下文
-	return BuildDialogContext(sessionID, &parentConv.DialogID, currentQuestion)
+	if shortTermContext != "" {
+		contextParts = append(contextParts, "## 最近对话上下文")
+		contextParts = append(contextParts, shortTermContext)
+	}
+
+	// 2. 构建长期记忆上下文（向量检索相关历史）
+	longTermContext, err := buildLongTermContext(sessionID, currentQuestion)
+	if err != nil {
+		// 长期记忆检索失败不应该影响整个对话流程，只记录错误
+		fmt.Printf("长期记忆检索失败: %v\n", err)
+	} else if longTermContext != "" {
+		contextParts = append(contextParts, "## 相关历史记忆")
+		contextParts = append(contextParts, longTermContext)
+	}
+
+	// 3. 如果没有任何上下文，返回空字符串
+	if len(contextParts) == 0 {
+		return "", nil
+	}
+
+	// 4. 添加说明文字
+	introduction := "以下是对话的上下文信息，请基于这些信息回答用户的问题：\n"
+
+	return introduction + strings.Join(contextParts, "\n\n"), nil
 }
 
 // CheckIfBranchingByConversation 根据conversation ID检测是否需要分叉
