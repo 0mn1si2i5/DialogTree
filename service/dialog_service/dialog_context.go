@@ -7,9 +7,23 @@ import (
 	"dialogTree/models"
 	"dialogTree/service/embedding_service"
 	"dialogTree/service/vector_service"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
+
+// QAPair 问答对结构
+type QAPair struct {
+	Q string `json:"Q"`
+	A string `json:"A"`
+}
+
+// ContextData 上下文数据结构
+type ContextData struct {
+	Recent  []QAPair `json:"recent"`
+	History []QAPair `json:"history"`
+	Current string   `json:"current"`
+}
 
 // BuildDialogContext 构建对话上下文（短期记忆 + 长期记忆）
 func BuildDialogContext(sessionID int64, parentDialogID *int64, currentQuestion string) (string, error) {
@@ -385,40 +399,104 @@ func CheckIfBranching(sessionID int64, parentDialogID *int64) (bool, *models.Con
 }
 
 // BuildDialogContextFromConversation 根据conversation ID构建对话上下文
-// 这个函数能正确处理分叉场景下的上下文追溯
+// 这个函数能正确处理分叉场景下的上下文追溯，返回JSON格式
 func BuildDialogContextFromConversation(sessionID int64, parentConversationID *int64, currentQuestion string) (string, error) {
-	var contextParts []string
+	contextData := ContextData{
+		Recent:  []QAPair{},
+		History: []QAPair{},
+		Current: currentQuestion,
+	}
 
 	// 1. 构建短期记忆上下文（从指定conversation往上追溯）
-	shortTermContext, err := buildShortTermContextFromConversation(sessionID, parentConversationID)
+	recentConversations, err := getRecentConversationsFromConversation(sessionID, parentConversationID)
 	if err != nil {
 		return "", fmt.Errorf("构建短期上下文失败: %v", err)
 	}
 
-	if shortTermContext != "" {
-		contextParts = append(contextParts, "## 最近对话上下文")
-		contextParts = append(contextParts, shortTermContext)
+	// 将最近对话转换为QAPair格式（按时间正序排列）
+	for i := len(recentConversations) - 1; i >= 0; i-- {
+		conv := recentConversations[i]
+		contextData.Recent = append(contextData.Recent, QAPair{
+			Q: conv.Prompt,
+			A: conv.Summary, // 使用摘要而非完整回答
+		})
 	}
 
 	// 2. 构建长期记忆上下文（向量检索相关历史）
-	longTermContext, err := buildLongTermContext(sessionID, currentQuestion)
+	historyConversations, err := getLongTermContextConversations(sessionID, currentQuestion)
 	if err != nil {
 		// 长期记忆检索失败不应该影响整个对话流程，只记录错误
 		fmt.Printf("长期记忆检索失败: %v\n", err)
-	} else if longTermContext != "" {
-		contextParts = append(contextParts, "## 相关历史记忆")
-		contextParts = append(contextParts, longTermContext)
+	} else {
+		contextData.History = historyConversations
 	}
 
-	// 3. 如果没有任何上下文，返回空字符串
-	if len(contextParts) == 0 {
-		return "", nil
+	// 3. 序列化为JSON
+	jsonData, err := json.Marshal(contextData)
+	if err != nil {
+		return "", fmt.Errorf("JSON序列化失败: %v", err)
 	}
 
-	// 4. 添加说明文字
-	introduction := "以下是对话的上下文信息，请基于这些信息回答用户的问题：\n"
+	return string(jsonData), nil
+}
 
-	return introduction + strings.Join(contextParts, "\n\n"), nil
+// getRecentConversationsFromConversation 从指定conversation获取最近的对话记录
+func getRecentConversationsFromConversation(sessionID int64, parentConversationID *int64) ([]models.ConversationModel, error) {
+	contextLayers := global.Config.Ai.ContextLayers
+	if contextLayers <= 0 {
+		return []models.ConversationModel{}, nil
+	}
+
+	if parentConversationID == nil {
+		// 如果没有指定父conversation，获取会话中最新的几轮对话（跨Dialog）
+		return getRecentConversationsAcrossDialogs(sessionID, contextLayers)
+	} else {
+		// 从指定的conversation开始往上追溯
+		return traceParentConversationsFromConversation(*parentConversationID, contextLayers)
+	}
+}
+
+// getLongTermContextConversations 获取长期记忆相关对话
+func getLongTermContextConversations(sessionID int64, currentQuestion string) ([]QAPair, error) {
+	if !global.Config.Vector.Enable {
+		return []QAPair{}, nil
+	}
+
+	// 1. 对当前问题进行向量化
+	questionVector, err := embedding_service.GetEmbedding(currentQuestion)
+	if err != nil {
+		return nil, fmt.Errorf("问题向量化失败: %v", err)
+	}
+
+	// 2. 在向量数据库中检索相似的历史对话
+	filter := map[string]interface{}{
+		"session_id": sessionID,
+	}
+
+	results, err := vector_service.VectorServiceInstance.Search(
+		questionVector,
+		global.Config.Vector.TopK,
+		filter,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("向量检索失败: %v", err)
+	}
+
+	// 3. 构建历史对话QAPair列表
+	var historyPairs []QAPair
+	for _, result := range results {
+		// 从元数据中提取信息
+		if prompt, ok := result.Metadata["prompt"].(string); ok {
+			if summary, ok := result.Metadata["summary"].(string); ok {
+				historyPairs = append(historyPairs, QAPair{
+					Q: prompt,
+					A: summary,
+				})
+			}
+		}
+	}
+
+	return historyPairs, nil
 }
 
 // CheckIfBranchingByConversation 根据conversation ID检测是否需要分叉

@@ -46,15 +46,15 @@ func (DialogApi) NewChat(c *gin.Context) {
 		return
 	}
 
-	// 构建上下文（短期记忆 + 向量检索）
-	context, err := dialog_service.BuildDialogContextFromConversation(req.SessionID, req.ParentConversationID, req.Content)
+	// 构建上下文（短期记忆 + 向量检索）- 现在返回JSON格式
+	contextJSON, err := dialog_service.BuildDialogContextFromConversation(req.SessionID, req.ParentConversationID, req.Content)
 	if err != nil {
 		res.Fail(err, "构建上下文失败", c)
 		return
 	}
 
-	// 准备发送给AI的完整消息
-	fullMessage := context + "\n\n用户问题：" + req.Content
+	// 直接使用JSON格式的上下文作为消息
+	fullMessage := contextJSON
 
 	// 调用AI进行流式对话
 	msgChan, sumChan, err := chat_anywhere.ChatStreamSum(fullMessage)
@@ -110,15 +110,15 @@ func (DialogApi) NewChatSync(c *gin.Context) {
 		return
 	}
 
-	// 构建上下文
-	context, err := dialog_service.BuildDialogContextFromConversation(req.SessionID, req.ParentConversationID, req.Content)
+	// 构建上下文 - 现在返回JSON格式
+	contextJSON, err := dialog_service.BuildDialogContextFromConversation(req.SessionID, req.ParentConversationID, req.Content)
 	if err != nil {
 		res.Fail(err, "构建上下文失败", c)
 		return
 	}
 
-	// 准备发送给AI的完整消息
-	fullMessage := context + "\n\n用户问题：" + req.Content
+	// 直接使用JSON格式的上下文作为消息
+	fullMessage := contextJSON
 
 	// 调用AI（简化版，直接返回结果）
 	msgChan, sumChan, err := chat_anywhere.ChatStreamSum(fullMessage)

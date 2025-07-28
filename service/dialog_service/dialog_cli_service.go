@@ -98,13 +98,13 @@ func (s *CliDialogService) ProcessDialogMessage(sessionID int64, parentDialogID 
 		parentConversationID = &parentConv.ID
 	}
 	
-	context, err := BuildDialogContextFromConversation(sessionID, parentConversationID, content)
+	contextJSON, err := BuildDialogContextFromConversation(sessionID, parentConversationID, content)
 	if err != nil {
 		return fmt.Errorf("构建上下文失败: %v", err)
 	}
 
-	// 准备完整消息
-	fullMessage := context + "\n\n用户问题：" + content
+	// 直接使用JSON格式的上下文作为消息
+	fullMessage := contextJSON
 
 	// 调用AI
 	msgChan, sumChan, err := chat_anywhere.ChatStreamSum(fullMessage)
