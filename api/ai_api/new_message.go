@@ -24,7 +24,7 @@ import (
 //		msg += fmt.Sprintf("上轮对话：%s;本轮问题：", prevSum)
 //	}
 //	msg += req.Content
-//	msgChan, err := chat_anywhere_ai.ChatStream(msg)
+//	msgChan, err := chat_anywhere.ChatStream(msg)
 //	if err != nil {
 //		res.Fail(err, "链接失败", c)
 //		return
@@ -44,7 +44,7 @@ import (
 //
 //func Archive(q, a string, req AiChatReq) {
 //	msg := fmt.Sprintf("userQuestion:%s;aiResponse:%s;", q, a)
-//	rep, err := chat_anywhere_ai.Summarize0(msg)
+//	rep, err := chat_anywhere.Summarize0(msg)
 //	if err != nil {
 //		logrus.Errorf("summarize error: %v\n", err)
 //		return

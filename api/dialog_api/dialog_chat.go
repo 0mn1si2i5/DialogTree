@@ -6,7 +6,7 @@ import (
 	"dialogTree/common/res"
 	"dialogTree/global"
 	"dialogTree/models"
-	"dialogTree/service/ai_service/chat_anywhere_ai"
+	"dialogTree/service/ai_service/chat_anywhere"
 	"dialogTree/service/dialog_service"
 	"encoding/json"
 	"fmt"
@@ -57,7 +57,7 @@ func (DialogApi) NewChat(c *gin.Context) {
 	fullMessage := context + "\n\n用户问题：" + req.Content
 
 	// 调用AI进行流式对话
-	msgChan, sumChan, err := chat_anywhere_ai.ChatStreamSum(fullMessage)
+	msgChan, sumChan, err := chat_anywhere.ChatStreamSum(fullMessage)
 	if err != nil {
 		res.Fail(err, "AI服务调用失败", c)
 		return
@@ -121,7 +121,7 @@ func (DialogApi) NewChatSync(c *gin.Context) {
 	fullMessage := context + "\n\n用户问题：" + req.Content
 
 	// 调用AI（简化版，直接返回结果）
-	msgChan, sumChan, err := chat_anywhere_ai.ChatStreamSum(fullMessage)
+	msgChan, sumChan, err := chat_anywhere.ChatStreamSum(fullMessage)
 	if err != nil {
 		res.Fail(err, "AI服务调用失败", c)
 		return

@@ -5,7 +5,7 @@ package dialog_service
 import (
 	"dialogTree/global"
 	"dialogTree/models"
-	"dialogTree/service/ai_service/chat_anywhere_ai"
+	"dialogTree/service/ai_service/chat_anywhere"
 	"fmt"
 	"strings"
 )
@@ -39,12 +39,12 @@ func (s *CliDialogService) CreateQuickSession(title string) (*models.SessionMode
 		Summary:    "",
 		CategoryID: 1, // 默认分类
 	}
-	
+
 	err := global.DB.Create(&session).Error
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &session, nil
 }
 
@@ -55,7 +55,7 @@ func (s *CliDialogService) GetSessionDialogTree(sessionID int64) ([]models.Dialo
 		Preload("ConversationModels").
 		Order("created_at ASC").
 		Find(&dialogs).Error
-	
+
 	return dialogs, err
 }
 
@@ -69,11 +69,11 @@ func (s *CliDialogService) StartDialogChat(sessionID int64, parentDialogID *int6
 			fmt.Println("退出对话。")
 			break
 		}
-		
+
 		if strings.TrimSpace(input) == "" {
 			continue
 		}
-		
+
 		// 处理对话
 		err = s.ProcessDialogMessage(sessionID, parentDialogID, input)
 		if err != nil {
@@ -81,7 +81,7 @@ func (s *CliDialogService) StartDialogChat(sessionID int64, parentDialogID *int6
 			continue
 		}
 	}
-	
+
 	return nil
 }
 
@@ -92,16 +92,16 @@ func (s *CliDialogService) ProcessDialogMessage(sessionID int64, parentDialogID 
 	if err != nil {
 		return fmt.Errorf("构建上下文失败: %v", err)
 	}
-	
+
 	// 准备完整消息
 	fullMessage := context + "\n\n用户问题：" + content
-	
+
 	// 调用AI
-	msgChan, sumChan, err := chat_anywhere_ai.ChatStreamSum(fullMessage)
+	msgChan, sumChan, err := chat_anywhere.ChatStreamSum(fullMessage)
 	if err != nil {
 		return fmt.Errorf("AI服务调用失败: %v", err)
 	}
-	
+
 	// 显示AI回复
 	fmt.Print("AI: ")
 	var fullAnswer strings.Builder
@@ -110,19 +110,19 @@ func (s *CliDialogService) ProcessDialogMessage(sessionID int64, parentDialogID 
 		fullAnswer.WriteString(chunk)
 	}
 	fmt.Println() // 换行
-	
+
 	// 获取摘要
 	var summary string
 	for s := range sumChan {
 		summary += s
 	}
-	
+
 	// 保存对话记录
 	err = s.SaveDialogRecord(sessionID, parentDialogID, content, fullAnswer.String(), summary)
 	if err != nil {
 		fmt.Printf("保存对话失败: %v\n", err)
 	}
-	
+
 	return nil
 }
 
@@ -138,11 +138,11 @@ func (s *CliDialogService) SaveDialogRecord(sessionID int64, parentDialogID *int
 		title = "对话"
 		summary = prompt[:min(50, len(prompt))]
 	}
-	
+
 	// 创建或获取 Dialog
 	var dialogID int64
 	var isNewSession bool
-	
+
 	if parentDialogID == nil {
 		// 创建新的根对话
 		dialog := models.DialogModel{
@@ -167,7 +167,7 @@ func (s *CliDialogService) SaveDialogRecord(sessionID int64, parentDialogID *int
 		}
 		dialogID = dialog.ID
 	}
-	
+
 	// 创建会话记录
 	conversation := models.ConversationModel{
 		Prompt:    prompt,
@@ -179,12 +179,12 @@ func (s *CliDialogService) SaveDialogRecord(sessionID int64, parentDialogID *int
 		IsStarred: false,
 		Comment:   "",
 	}
-	
+
 	err := global.DB.Create(&conversation).Error
 	if err != nil {
 		return fmt.Errorf("创建会话记录失败: %v", err)
 	}
-	
+
 	// 如果是新会话的第一条对话，更新会话信息
 	if isNewSession {
 		updates := map[string]interface{}{
@@ -197,7 +197,7 @@ func (s *CliDialogService) SaveDialogRecord(sessionID int64, parentDialogID *int
 			fmt.Printf("更新会话信息失败: %v\n", err)
 		}
 	}
-	
+
 	// 异步处理向量化存储
 	go func() {
 		err := StoreConversationVector(conversation.ID, prompt, answer, summary)
@@ -205,7 +205,7 @@ func (s *CliDialogService) SaveDialogRecord(sessionID int64, parentDialogID *int
 			fmt.Printf("向量化存储失败: %v\n", err)
 		}
 	}()
-	
+
 	return nil
 }
 

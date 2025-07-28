@@ -3,81 +3,85 @@
 package embedding_service
 
 import (
-	"bytes"
 	"dialogTree/global"
-	"encoding/json"
+	"dialogTree/service/embedding_service/providers"
 	"fmt"
-	"io"
-	"net/http"
-	"time"
+	"strings"
 )
 
-type EmbeddingRequest struct {
-	Input string `json:"input"`
-	Model string `json:"model"`
-}
+type EmbeddingProvider string
 
-type EmbeddingResponse struct {
-	Data []struct {
-		Embedding []float32 `json:"embedding"`
-	} `json:"data"`
-}
+const (
+	OpenAIProvider       EmbeddingProvider = "openai"
+	DeepSeekProvider     EmbeddingProvider = "deepseek"
+	ChatAnywhereProvider EmbeddingProvider = "chatanywhere"
+)
 
-type EmbeddingService struct {
-	client *http.Client
-}
+type EmbeddingService struct{}
 
 var EmbeddingServiceInstance *EmbeddingService
 
 func InitEmbeddingService() {
-	EmbeddingServiceInstance = &EmbeddingService{
-		client: &http.Client{Timeout: 30 * time.Second},
-	}
+	EmbeddingServiceInstance = &EmbeddingService{}
 }
 
+// GetEmbedding 获取embedding，根据配置的provider选择对应的服务
 func (e *EmbeddingService) GetEmbedding(text string) ([]float32, error) {
-	reqBody := EmbeddingRequest{
-		Input: text,
-		Model: global.Config.Ai.EmbeddingModel,
+	provider := EmbeddingProvider(strings.ToLower(global.Config.Ai.EmbeddingProvider))
+	
+	switch provider {
+	case OpenAIProvider:
+		return providers.OpenAIEmbedding(text)
+	case DeepSeekProvider:
+		return providers.DeepSeekEmbedding(text)
+	case ChatAnywhereProvider:
+		return providers.ChatAnywhereEmbedding(text)
+	default:
+		// 如果没有配置或配置错误，尝试自动选择可用的提供商
+		return e.getEmbeddingWithFallback(text)
 	}
-	
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, err
-	}
-	
-	// 使用 ChatAnywhere 的配置（通常支持 embedding API）
-	req, err := http.NewRequest("POST", "https://api.chatanywhere.tech/v1/embeddings", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return nil, err
-	}
-	
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+global.Config.Ai.ChatAnywhere.SecretKey)
-	
-	resp, err := e.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("embedding request failed: %d, %s", resp.StatusCode, string(body))
-	}
-	
-	var embeddingResp EmbeddingResponse
-	if err := json.NewDecoder(resp.Body).Decode(&embeddingResp); err != nil {
-		return nil, err
-	}
-	
-	if len(embeddingResp.Data) == 0 {
-		return nil, fmt.Errorf("no embedding data returned")
-	}
-	
-	return embeddingResp.Data[0].Embedding, nil
 }
 
+// getEmbeddingWithFallback 自动选择可用的embedding提供商
+func (e *EmbeddingService) getEmbeddingWithFallback(text string) ([]float32, error) {
+	// 优先级：OpenAI > DeepSeek > ChatAnywhere
+	var lastErr error
+	
+	// 尝试OpenAI
+	if global.Config.Ai.OpenAI.SecretKey != "" {
+		result, err := providers.OpenAIEmbedding(text)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+	}
+	
+	// 尝试DeepSeek
+	if global.Config.Ai.DeepSeek.SecretKey != "" {
+		result, err := providers.DeepSeekEmbedding(text)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+	}
+	
+	// 尝试ChatAnywhere
+	if global.Config.Ai.ChatAnywhere.SecretKey != "" {
+		result, err := providers.ChatAnywhereEmbedding(text)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+	}
+	
+	// 所有提供商都不可用
+	if lastErr != nil {
+		return nil, fmt.Errorf("所有embedding提供商都不可用，最后错误: %v", lastErr)
+	}
+	return nil, fmt.Errorf("没有配置可用的embedding提供商API密钥")
+}
+
+// GetEmbedding 全局函数，保持向后兼容
 func GetEmbedding(text string) ([]float32, error) {
 	return EmbeddingServiceInstance.GetEmbedding(text)
 }

@@ -5,7 +5,7 @@ package ai_service
 import (
 	"dialogTree/common/cres"
 	"dialogTree/global"
-	"dialogTree/service/ai_service/chat_anywhere_ai"
+	"dialogTree/service/ai_service/chat_anywhere"
 	"dialogTree/service/ai_service/deepseek"
 	"dialogTree/service/ai_service/openai"
 	"dialogTree/service/redis_service"
@@ -37,13 +37,13 @@ func ChatStreamSum(msg string, provider AIProvider) (msgChan, sumChan chan strin
 	case DeepSeekProvider:
 		return deepseek.ChatStreamSum(msg)
 	case ChatAnywhereProvider:
-		return chat_anywhere_ai.ChatStreamSum(msg)
+		return chat_anywhere.ChatStreamSum(msg)
 	case BackendAIProvider:
 		// BackendAI使用ChatAnywhere的实现，但使用不同的配置
-		return chat_anywhere_ai.ChatStreamSum(msg)
+		return chat_anywhere.ChatStreamSum(msg)
 	default:
 		// 默认使用ChatAnywhere
-		return chat_anywhere_ai.ChatStreamSum(msg)
+		return chat_anywhere.ChatStreamSum(msg)
 	}
 }
 
@@ -55,11 +55,11 @@ func ChatStream(msg string, provider AIProvider) (msgChan chan string, err error
 	case DeepSeekProvider:
 		return deepseek.ChatStream(msg)
 	case ChatAnywhereProvider:
-		return chat_anywhere_ai.ChatStream(msg)
+		return chat_anywhere.ChatStream(msg)
 	case BackendAIProvider:
-		return chat_anywhere_ai.ChatStream(msg)
+		return chat_anywhere.ChatStream(msg)
 	default:
-		return chat_anywhere_ai.ChatStream(msg)
+		return chat_anywhere.ChatStream(msg)
 	}
 }
 
