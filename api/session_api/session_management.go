@@ -16,6 +16,11 @@ type CreateSessionReq struct {
 	CategoryID int64  `json:"categoryID"`
 }
 
+type UpdateSessionReq struct {
+	Title      string `json:"title" binding:"required"`
+	CategoryID int64  `json:"categoryID" binding:"required"`
+}
+
 type SessionListResponse struct {
 	ID         int64  `json:"id"`
 	Title      string `json:"title"`
@@ -65,6 +70,107 @@ func (SessionApi) GetSessionList(c *gin.Context) {
 	}
 
 	res.OkWithDetail(response, "获取成功", c)
+}
+
+// GetSessionsByCategory 获取指定分类下的所有会话
+func (SessionApi) GetSessionsByCategory(c *gin.Context) {
+	categoryIdStr := c.Param("categoryId")
+	categoryId, err := strconv.ParseInt(categoryIdStr, 10, 64)
+	if err != nil {
+		res.FailWithMessage("分类ID无效", c)
+		return
+	}
+
+	// 检查分类是否存在
+	var category models.CategoryModel
+	err = global.DB.First(&category, categoryId).Error
+	if err != nil {
+		res.FailWithMessage("分类不存在", c)
+		return
+	}
+
+	// 获取该分类下的所有会话
+	var sessions []models.SessionModel
+	err = global.DB.Where("category_id = ?", categoryId).
+		Order("updated_at DESC").
+		Find(&sessions).Error
+	if err != nil {
+		res.Fail(err, "获取会话列表失败", c)
+		return
+	}
+
+	var response []SessionListResponse
+	for _, session := range sessions {
+		response = append(response, SessionListResponse{
+			ID:         session.ID,
+			Title:      session.Tittle,
+			Summary:    session.Summary,
+			CategoryID: session.CategoryID,
+			CreatedAt:  session.CreatedAt.Format("2006-01-02 15:04:05"),
+			UpdatedAt:  session.UpdatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	res.OkWithDetail(gin.H{
+		"categoryId":   categoryId,
+		"categoryName": category.Name,
+		"sessions":     response,
+	}, "获取成功", c)
+}
+
+// UpdateSession 更新会话信息
+func (SessionApi) UpdateSession(c *gin.Context) {
+	sessionIdStr := c.Param("sessionId")
+	sessionId, err := strconv.ParseInt(sessionIdStr, 10, 64)
+	if err != nil {
+		res.FailWithMessage("会话ID无效", c)
+		return
+	}
+
+	var req UpdateSessionReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		res.FailWithMessage("参数错误", c)
+		return
+	}
+
+	// 验证title不能为空
+	if len(req.Title) == 0 {
+		res.FailWithMessage("标题不能为空", c)
+		return
+	}
+
+	// 验证category是否存在
+	var category models.CategoryModel
+	err = global.DB.First(&category, req.CategoryID).Error
+	if err != nil {
+		res.FailWithMessage("分类不存在", c)
+		return
+	}
+
+	// 检查session是否存在
+	var session models.SessionModel
+	err = global.DB.First(&session, sessionId).Error
+	if err != nil {
+		res.FailWithMessage("会话不存在", c)
+		return
+	}
+
+	// 更新session信息
+	session.Tittle = req.Title
+	session.CategoryID = req.CategoryID
+
+	err = global.DB.Save(&session).Error
+	if err != nil {
+		res.Fail(err, "更新会话失败", c)
+		return
+	}
+
+	res.OkWithDetail(gin.H{
+		"sessionId":    session.ID,
+		"title":        session.Tittle,
+		"categoryId":   session.CategoryID,
+		"categoryName": category.Name,
+	}, "更新成功", c)
 }
 
 // CreateSession 创建新会话

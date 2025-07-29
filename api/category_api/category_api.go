@@ -68,7 +68,7 @@ func (*CategoryApi) UpdateCategory(c *gin.Context) {
 		res.Fail(err, "更新失败", c)
 		return
 	}
-	res.FailWithMsg("更新成功", c)
+	res.SuccessWithMsg("更新成功", c)
 }
 
 func (*CategoryApi) DeleteCategory(c *gin.Context) {
@@ -84,5 +84,5 @@ func (*CategoryApi) DeleteCategory(c *gin.Context) {
 		res.FailWithMessage("删除失败", c)
 		return
 	}
-	res.FailWithMsg("删除成功", c)
+	res.SuccessWithMsg("删除成功", c)
 }

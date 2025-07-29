@@ -4,7 +4,6 @@ package common
 
 import (
 	"bufio"
-	"dialogTree/common/cres"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -134,7 +133,7 @@ func StreamSplitter(scanner *bufio.Scanner, res *http.Response, msgChan, sumChan
 				close(msgChan)
 				return
 			}
-			cres.Debug("完整消息：" + wholeMsg)
+			logrus.Debugf("本次收到的完整消息：" + wholeMsg)
 
 			_, ok := <-msgChan
 			if ok {

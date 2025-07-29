@@ -9,8 +9,13 @@ import (
 	"dialogTree/service/vector_service"
 	"encoding/json"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"strings"
 )
+
+// 为了控制每个上下文的最长长度
+const maxLength = 1000
+const headTailLength = 400
 
 // QAPair 问答对结构
 type QAPair struct {
@@ -194,9 +199,21 @@ func traceParentConversationsFromConversation(conversationID int64, maxLayers in
 
 // findParentConversation 找到指定conversation的父conversation
 func findParentConversation(conv models.ConversationModel) (*models.ConversationModel, error) {
+	// 首先在同一dialog内查找前一个conversation
+	var prevConversation models.ConversationModel
+	err := global.DB.Where("dialog_id = ? AND created_at < ?", conv.DialogID, conv.CreatedAt).
+		Order("created_at DESC").
+		First(&prevConversation).Error
+
+	if err == nil {
+		// 找到同一dialog内的前一个conversation
+		return &prevConversation, nil
+	}
+
+	// 如果同一dialog内没有更早的conversation，则查找跨dialog的父conversation
 	// 获取当前conversation所在的dialog
 	var currentDialog models.DialogModel
-	err := global.DB.First(&currentDialog, conv.DialogID).Error
+	err = global.DB.First(&currentDialog, conv.DialogID).Error
 	if err != nil {
 		return nil, fmt.Errorf("获取dialog失败: %v", err)
 	}
@@ -206,17 +223,32 @@ func findParentConversation(conv models.ConversationModel) (*models.Conversation
 		return nil, fmt.Errorf("已到达根节点")
 	}
 
+	// 如果当前dialog有分叉点信息，直接使用分叉点conversation
+	if currentDialog.BranchFromConversationID != nil {
+		var parentConversation models.ConversationModel
+		err = global.DB.First(&parentConversation, *currentDialog.BranchFromConversationID).Error
+		if err != nil {
+			return nil, fmt.Errorf("查询分叉点conversation失败: %v", err)
+		}
+		return &parentConversation, nil
+	}
+
+	// 兼容旧数据：如果没有分叉点信息，使用原来的逻辑
 	// 找到父dialog中的分叉点conversation
-	// 分叉点conversation应该是：创建时间 <= 当前dialog创建时间的最新conversation
+	// 在分叉场景下，我们需要找到分叉发生时的那个conversation
+	// 策略：查找父dialog中在当前dialog创建之前就存在的最新conversation
 	var parentConversation models.ConversationModel
-	err = global.DB.Where("dialog_id = ? AND created_at <= ?",
+
+	// 首先尝试找到父dialog中在当前dialog创建时间之前的最新conversation
+	err = global.DB.Where("dialog_id = ? AND created_at < ?",
 		*currentDialog.ParentID, currentDialog.CreatedAt).
 		Order("created_at DESC").
 		First(&parentConversation).Error
 
 	if err != nil {
 		if err.Error() == "record not found" {
-			// 如果找不到合适的conversation，尝试找父dialog的最新conversation
+			// 如果找不到时间在前的conversation，说明当前dialog是从父dialog的最新conversation分叉的
+			// 这种情况下，直接找父dialog的最新conversation
 			err = global.DB.Where("dialog_id = ?", *currentDialog.ParentID).
 				Order("created_at DESC").
 				First(&parentConversation).Error
@@ -417,8 +449,8 @@ func BuildDialogContextFromConversation(sessionID int64, parentConversationID *i
 	for i := len(recentConversations) - 1; i >= 0; i-- {
 		conv := recentConversations[i]
 		contextData.Recent = append(contextData.Recent, QAPair{
-			Q: conv.Prompt,
-			A: conv.Answer, // 使用摘要而非完整回答
+			Q: truncateText(conv.Prompt, "提问中间部分"),
+			A: truncateText(conv.Answer, "答案中间部分"), // 使用完整回答
 		})
 	}
 
@@ -437,7 +469,22 @@ func BuildDialogContextFromConversation(sessionID int64, parentConversationID *i
 		return "", fmt.Errorf("JSON序列化失败: %v", err)
 	}
 
+	logrus.Debug("\n" + strings.Repeat("=", 30) + "上下文拼接开始" + strings.Repeat("=", 30) + "\n")
+	logrus.Debugf("本次Recent: %v+\n", contextData.Recent)
+	logrus.Debugf("本次History: %v+\n", contextData.History)
+	logrus.Debugf("本次Current: %s\n", contextData.Current)
+	logrus.Debug(strings.Repeat("=", 30) + "上下文拼接结束" + strings.Repeat("=", 30) + "\n")
+
 	return string(jsonData), nil
+}
+
+func truncateText(text, note string) string {
+	if len(text) <= maxLength {
+		return text
+	}
+	head := text[:headTailLength]
+	tail := text[len(text)-headTailLength:]
+	return fmt.Sprintf("%s...(%s已省略)...%s", head, note, tail)
 }
 
 // getRecentConversationsFromConversation 从指定conversation获取最近的对话记录
@@ -510,14 +557,13 @@ func getLongTermContextConversations(sessionID int64, currentQuestion string) ([
 func CheckIfBranchingByConversation(parentConversationID int64) (bool, error) {
 	// 获取父conversation
 	var parentConv models.ConversationModel
-	err := global.DB.First(&parentConv, parentConversationID).Error
-	if err != nil {
+	if err := global.DB.First(&parentConv, parentConversationID).Error; err != nil {
 		return false, fmt.Errorf("找不到父conversation: %v", err)
 	}
 
 	// 找到同一dialog中最新的conversation
 	var latestConv models.ConversationModel
-	err = global.DB.Where("dialog_id = ?", parentConv.DialogID).
+	err := global.DB.Where("dialog_id = ?", parentConv.DialogID).
 		Order("created_at DESC").
 		First(&latestConv).Error
 	if err != nil {
@@ -531,65 +577,68 @@ func CheckIfBranchingByConversation(parentConversationID int64) (bool, error) {
 // CreateBranchingDialogs 创建分叉时的新dialogs
 // 返回: 新对话的dialogID, 被分叉出去的conversations的新dialogID, error
 func CreateBranchingDialogs(sessionID int64, parentConversationID int64, parentDialogID int64) (int64, int64, error) {
-	// 开始事务
 	tx := global.DB.Begin()
+	committed := false
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
 		}
+		if !committed {
+			tx.Rollback()
+		}
 	}()
 
-	// 1. 创建新dialog用于存放新对话（分叉点的一个分支）
+	// 1. 创建新 dialog，用于用户输入新分支
 	newDialog := models.DialogModel{
-		SessionID: sessionID,
-		ParentID:  &parentDialogID,
+		SessionID:                sessionID,
+		ParentID:                 &parentDialogID,
+		BranchFromConversationID: &parentConversationID,
 	}
 	if err := tx.Create(&newDialog).Error; err != nil {
-		tx.Rollback()
-		return 0, 0, fmt.Errorf("创建新dialog失败: %v", err)
+		return 0, 0, fmt.Errorf("创建新 dialog 失败: %v", err)
 	}
 
-	// 2. 创建另一个dialog用于存放被分叉出去的conversations（分叉点的另一个分支）
+	logrus.Debugf("\n创建新 dialog，用于用户输入新分支 %v+\n", newDialog)
+
+	// 2. 创建另一个 dialog，用于接收被分出的历史对话（分叉点之后）
 	branchedDialog := models.DialogModel{
-		SessionID: sessionID,
-		ParentID:  &parentDialogID,
+		SessionID:                sessionID,
+		ParentID:                 &parentDialogID,
+		BranchFromConversationID: &parentConversationID,
 	}
 	if err := tx.Create(&branchedDialog).Error; err != nil {
-		tx.Rollback()
-		return 0, 0, fmt.Errorf("创建分支dialog失败: %v", err)
+		return 0, 0, fmt.Errorf("创建分支 dialog 失败: %v", err)
 	}
 
-	// 3. 找到需要移动的conversations（分叉点之后的所有conversations）
-	var conversationsToMove []models.ConversationModel
-	err := tx.Where("dialog_id = ? AND created_at > (SELECT created_at FROM conversation_models WHERE id = ?)",
-		parentDialogID, parentConversationID).
-		Order("created_at ASC").
-		Find(&conversationsToMove).Error
-	if err != nil {
-		tx.Rollback()
-		return 0, 0, fmt.Errorf("查找需要移动的conversations失败: %v", err)
+	logrus.Debugf("\n创建另一个 dialog，用于接收被分出的历史对话（分叉点之后） %v+\n", branchedDialog)
+
+	// 3. 将原来 parentDialogID 的子 dialog 的 parent_id 改为 branchedDialog.ID
+	if err := tx.Model(&models.DialogModel{}).
+		Where("parent_id = ? AND id NOT IN ?", parentDialogID, []int64{newDialog.ID, branchedDialog.ID}).
+		Update("parent_id", branchedDialog.ID).Error; err != nil {
+		return 0, 0, fmt.Errorf("更新子 dialog 的父 ID 失败: %v", err)
 	}
 
-	// 4. 移动conversations到新的分支dialog
-	if len(conversationsToMove) > 0 {
-		conversationIDs := make([]int64, len(conversationsToMove))
-		for i, conv := range conversationsToMove {
-			conversationIDs[i] = conv.ID
-		}
+	logrus.Debugf("将原本父 dialog %d 的 dialog，修改其父节点 id 为 %d\n", parentDialogID, branchedDialog.ID)
 
-		err = tx.Model(&models.ConversationModel{}).
-			Where("id IN ?", conversationIDs).
-			Update("dialog_id", branchedDialog.ID).Error
-		if err != nil {
-			tx.Rollback()
-			return 0, 0, fmt.Errorf("移动conversations失败: %v", err)
-		}
+	// 4. 检查分叉点 conversation 是否存在（可选：防止 parentID 非法）
+	var parentConv models.ConversationModel
+	if err := tx.First(&parentConv, parentConversationID).Error; err != nil {
+		return 0, 0, fmt.Errorf("分叉点 conversation 不存在: %v", err)
+	}
+
+	// 5. 移动分叉点之后的对话记录（使用 ID 比时间更可靠）
+	if err := tx.Model(&models.ConversationModel{}).
+		Where("dialog_id = ? AND id > ?", parentDialogID, parentConversationID).
+		Update("dialog_id", branchedDialog.ID).Error; err != nil {
+		return 0, 0, fmt.Errorf("移动 conversation 到分支失败: %v", err)
 	}
 
 	// 提交事务
 	if err := tx.Commit().Error; err != nil {
 		return 0, 0, fmt.Errorf("提交事务失败: %v", err)
 	}
+	committed = true
 
 	return newDialog.ID, branchedDialog.ID, nil
 }

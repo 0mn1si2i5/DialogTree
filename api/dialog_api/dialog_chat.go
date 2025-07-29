@@ -56,9 +56,11 @@ func (DialogApi) NewChat(c *gin.Context) {
 	// 直接使用JSON格式的上下文作为消息
 	fullMessage := contextJSON
 
+	logrus.Debugf("合并后的消息: %s", fullMessage)
+
 	// 调用AI进行流式对话
 	provider := ai_service.GetDefaultProvider()
-	msgChan, sumChan, err := ai_service.ChatStreamSum(fullMessage, provider) // todo
+	msgChan, sumChan, err := ai_service.ChatStreamSum(fullMessage, provider)
 	if err != nil {
 		res.Fail(err, "AI服务调用失败", c)
 		return
@@ -179,17 +181,16 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 			SessionID: req.SessionID,
 			ParentID:  nil,
 		}
-		err := global.DB.Create(&dialog).Error
-		if err != nil {
+		if err := global.DB.Create(&dialog).Error; err != nil {
 			return nil, fmt.Errorf("创建对话节点失败: %v", err)
 		}
+
 		dialogID = dialog.ID
 		isNewSession = true
 	} else {
 		// 指定了父conversation，需要检查是否分叉
 		parentConv := &models.ConversationModel{}
-		err := global.DB.First(parentConv, *req.ParentConversationID).Error
-		if err != nil {
+		if err := global.DB.First(parentConv, *req.ParentConversationID).Error; err != nil {
 			return nil, fmt.Errorf("找不到父conversation: %v", err)
 		}
 
@@ -200,6 +201,7 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 		}
 
 		if needsBranching {
+			logrus.Debugf("\n需要分叉：创建分叉dialogs")
 			// 需要分叉：创建分叉dialogs
 			newDialogID, _, err := dialog_service.CreateBranchingDialogs(req.SessionID, *req.ParentConversationID, parentConv.DialogID)
 			if err != nil {
@@ -292,8 +294,37 @@ func (DialogApi) StarConversation(c *gin.Context) {
 	}, status, c)
 }
 
+type CommentReq struct {
+	ConversationID int64  `json:"id" binding:"required"`
+	Comment        string `json:"comment" binding:"required"`
+}
+
 // UpdateConversationComment 更新会话评论
 func (DialogApi) UpdateConversationComment(c *gin.Context) {
+	var req CommentReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		res.FailWithMessage("参数错误", c)
+		return
+	}
+
+	result := global.DB.Model(&models.ConversationModel{}).
+		Where("id = ?", req.ConversationID).
+		Update("comment", req.Comment)
+
+	if result.Error != nil {
+		res.Fail(result.Error, "更新评论失败", c)
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		res.FailWithMessage("会话不存在或评论未更改", c)
+		return
+	}
+
+	res.OkWithMessage("评论更新成功", c)
+}
+
+func (DialogApi) DeleteConversationComment(c *gin.Context) {
 	conversationIdStr := c.Param("conversationId")
 	conversationId, err := strconv.ParseInt(conversationIdStr, 10, 64)
 	if err != nil {
@@ -301,23 +332,109 @@ func (DialogApi) UpdateConversationComment(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Comment string `json:"comment"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		res.FailWithMessage("参数错误", c)
-		return
-	}
-
-	err = global.DB.Model(&models.ConversationModel{}).
+	result := global.DB.Model(&models.ConversationModel{}).
 		Where("id = ?", conversationId).
-		Update("comment", req.Comment).Error
-	if err != nil {
-		res.Fail(err, "更新评论失败", c)
+		Update("comment", "")
+
+	if result.Error != nil {
+		res.Fail(result.Error, "删除评论失败", c)
 		return
 	}
 
-	res.OkWithMessage("评论更新成功", c)
+	if result.RowsAffected == 0 {
+		res.FailWithMessage("会话不存在或评论已为空", c)
+		return
+	}
+
+	res.OkWithMessage("评论删除成功", c)
+}
+
+// GetAncestors 获取指定conversation的所有祖先对话
+func (DialogApi) GetAncestors(c *gin.Context) {
+	conversationIdStr := c.Param("conversationId")
+	conversationId, err := strconv.ParseInt(conversationIdStr, 10, 64)
+	if err != nil {
+		res.FailWithMessage("会话ID无效", c)
+		return
+	}
+
+	// 查找指定的conversation
+	var conversation models.ConversationModel
+	err = global.DB.First(&conversation, conversationId).Error
+	if err != nil {
+		res.FailWithMessage("会话不存在", c)
+		return
+	}
+
+	// 获取所有祖先对话
+	ancestors, err := getDialogAncestors(conversationId)
+	if err != nil {
+		res.Fail(err, "获取祖先对话失败", c)
+		return
+	}
+
+	ancestors = append(ancestors, conversation)
+
+	res.OkWithDetail(ancestors, "获取祖先对话成功", c)
+}
+
+// getDialogAncestors 递归获取conversation的所有祖先对话
+func getDialogAncestors(conversationID int64) ([]models.ConversationModel, error) {
+	var ancestors []models.ConversationModel
+
+	// 查找当前conversation
+	var currentConv models.ConversationModel
+	err := global.DB.First(&currentConv, conversationID).Error
+	if err != nil {
+		return ancestors, err
+	}
+
+	// 1. 先在同一个dialog内查找所有比当前conversation创建时间更早的conversations
+	var sameDialogAncestors []models.ConversationModel
+	err = global.DB.Where("dialog_id = ? AND created_at < ?", currentConv.DialogID, currentConv.CreatedAt).
+		Order("created_at ASC").
+		Find(&sameDialogAncestors).Error
+	if err != nil {
+		return ancestors, err
+	}
+
+	// 添加同一dialog内的祖先（按创建时间升序）
+	ancestors = append(ancestors, sameDialogAncestors...)
+
+	// 2. 查找当前dialog的父dialog
+	var currentDialog models.DialogModel
+	err = global.DB.First(&currentDialog, currentConv.DialogID).Error
+	if err != nil {
+		return ancestors, err
+	}
+
+	// 3. 如果有父dialog，需要找到分叉点conversation
+	if currentDialog.ParentID != nil {
+		// 找到父dialog中的分叉点conversation（即最后一个conversation，也就是分叉的起点）
+		var branchPointConv models.ConversationModel
+		err = global.DB.Where("dialog_id = ?", *currentDialog.ParentID).
+			Order("created_at DESC").
+			Limit(1).
+			First(&branchPointConv).Error
+		if err != nil {
+			return ancestors, err
+		}
+
+		// 递归获取分叉点conversation的所有祖先
+		branchPointAncestors, err := getDialogAncestors(branchPointConv.ID)
+		if err != nil {
+			return ancestors, err
+		}
+
+		// 将分叉点及其祖先添加到最前面（保持时间顺序）
+		result := make([]models.ConversationModel, 0, len(branchPointAncestors)+len(ancestors)+1)
+		result = append(result, branchPointAncestors...)
+		result = append(result, branchPointConv)
+		result = append(result, ancestors...)
+		ancestors = result
+	}
+
+	return ancestors, nil
 }
 
 func min(a, b int) int {

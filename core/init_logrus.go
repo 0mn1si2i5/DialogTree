@@ -154,7 +154,12 @@ func InitLogrus() {
 	logrus.SetOutput(os.Stdout)          //设置输出类型
 	logrus.SetReportCaller(true)         //开启返回函数名和行号
 	logrus.SetFormatter(&LogFormatter{}) //设置自己定义的Formatter
-	logrus.SetLevel(logrus.DebugLevel)   //设置最低的Level
+	if global.Config.System.Mode == "debug" {
+		logrus.SetLevel(logrus.DebugLevel) //设置最低的Level
+	} else {
+		logrus.SetLevel(logrus.InfoLevel)
+	}
+	
 	l := global.Config.Logrus
 	InitFile(l.Dir, l.App)
 	logrus.Info("logrus init success")

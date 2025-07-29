@@ -4,8 +4,9 @@ package models
 
 type DialogModel struct {
 	Model
-	SessionID int64  `gorm:"index"`
-	ParentID  *int64 `gorm:"index"` // 对话之间的树状关系
+	SessionID            int64  `gorm:"index"`
+	ParentID             *int64 `gorm:"index"` // 对话之间的树状关系
+	BranchFromConversationID *int64 `gorm:"index"` // 从哪个conversation分叉出来的
 
 	// fk
 	SessionModel       SessionModel         `gorm:"foreignKey:SessionID;references:ID" json:"-"`

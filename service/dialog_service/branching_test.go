@@ -23,7 +23,7 @@ func setupTestConfig() {
 				// 配置文件读取失败，使用默认配置
 				global.Config = &conf.Config{
 					Ai: conf.Ai{
-						ContextLayers: 3,
+						ContextLayers: 10, // 增加上下文层数以支持复杂分叉测试
 					},
 					Vector: conf.Vector{
 						Enable: false, // 测试中不启用向量数据库
