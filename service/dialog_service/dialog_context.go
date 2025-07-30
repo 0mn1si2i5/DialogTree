@@ -188,9 +188,10 @@ func traceParentConversationsFromConversation(conversationID int64, maxLayers in
 		parentConversation, err := findParentConversation(conv)
 		if err != nil {
 			// 如果找不到父conversation，说明已经到达根节点
+			logrus.Debugf("已找到达根节点，或其他错误: %v", err)
 			break
 		}
-
+		logrus.Debugf("找到父对话，id: %d", parentConversation.ID)
 		currentConversationID = &parentConversation.ID
 	}
 

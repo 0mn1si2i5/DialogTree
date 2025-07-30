@@ -8,7 +8,6 @@ import (
 	"dialogTree/models"
 	"dialogTree/service/ai_service"
 	"dialogTree/service/ai_service/chat_anywhere"
-	"dialogTree/service/demo_service"
 	"dialogTree/service/dialog_service"
 	"fmt"
 	"strconv"
@@ -211,8 +210,31 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 			}
 			dialogID = newDialogID
 		} else {
-			// 不需要分叉：直接在当前dialog中添加conversation
-			dialogID = parentConv.DialogID
+			// 找一下父 dialog 是否有子 dialog
+			var childCount int64
+			err :=
+				global.DB.Model(&models.DialogModel{}).Where("parent_id = ?",
+					parentConv.DialogID).Count(&childCount).Error
+			if err != nil {
+				return nil, fmt.Errorf("数据库查询失败: %v", err)
+			}
+
+			if childCount == 0 {
+				// 如果没有别的子节点，则不需要分叉：直接在当前dialog中添加conversation
+				dialogID = parentConv.DialogID
+			} else {
+				// 找到了父 dialog 的其他子节点，则需要新建一个 dialog
+				newDialog := models.DialogModel{
+					SessionID:                parentConv.SessionID,
+					ParentID:                 &parentConv.DialogID,
+					BranchFromConversationID: &parentConv.ID,
+				}
+				if err := global.DB.Create(&newDialog).Error; err !=
+					nil {
+					return nil, fmt.Errorf("创建dialog失败: %v", err)
+				}
+				dialogID = newDialog.ID
+			}
 		}
 	}
 
@@ -230,7 +252,7 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 
 	err := global.DB.Create(&conversation).Error
 	if err != nil {
-		return nil, fmt.Errorf("创建会话记录失败: %v", err)
+		return nil, fmt.Errorf("创建对话记录失败: %v", err)
 	}
 
 	// 如果是新会话的第一条对话，更新会话信息
