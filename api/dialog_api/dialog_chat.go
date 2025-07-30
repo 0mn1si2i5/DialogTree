@@ -269,12 +269,14 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 	}
 
 	// 异步处理向量化存储
-	go func() {
-		err := dialog_service.StoreConversationVector(conversation.ID, req.Content, answer, s.Summary)
-		if err != nil {
-			logrus.Errorf("向量化存储失败: %v", err)
-		}
-	}()
+	if global.Config.Vector.Enable {
+		go func() {
+			err := dialog_service.StoreConversationVector(conversation.ID, req.Content, answer, s.Summary)
+			if err != nil {
+				logrus.Errorf("向量化存储失败: %v", err)
+			}
+		}()
+	}
 
 	// 更新 session 时间
 	err = global.DB.Model(&models.SessionModel{}).

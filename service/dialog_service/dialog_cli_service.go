@@ -97,7 +97,7 @@ func (s *CliDialogService) ProcessDialogMessage(sessionID int64, parentDialogID 
 		}
 		parentConversationID = &parentConv.ID
 	}
-	
+
 	contextJSON, err := BuildDialogContextFromConversation(sessionID, parentConversationID, content)
 	if err != nil {
 		return fmt.Errorf("构建上下文失败: %v", err)
@@ -209,12 +209,14 @@ func (s *CliDialogService) SaveDialogRecord(sessionID int64, parentDialogID *int
 	}
 
 	// 异步处理向量化存储
-	go func() {
-		err := StoreConversationVector(conversation.ID, prompt, answer, summary)
-		if err != nil {
-			fmt.Printf("向量化存储失败: %v\n", err)
-		}
-	}()
+	if global.Config.Vector.Enable {
+		go func() {
+			err := StoreConversationVector(conversation.ID, prompt, answer, summary)
+			if err != nil {
+				fmt.Printf("向量化存储失败: %v\n", err)
+			}
+		}()
+	}
 
 	return nil
 }

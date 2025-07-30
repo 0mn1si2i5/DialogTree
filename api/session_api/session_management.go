@@ -6,6 +6,8 @@ import (
 	"dialogTree/common/res"
 	"dialogTree/global"
 	"dialogTree/models"
+	"dialogTree/service/dialog_service"
+	"github.com/sirupsen/logrus"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -278,6 +280,15 @@ func deleteSessionTransaction(sessionID int64) error {
 		}
 	}()
 
+	// 查询有哪些对话（为了删除向量）
+	var conversations []models.ConversationModel
+	if global.Config.Vector.Enable {
+		if err := tx.Where("session_id = ?", sessionID).Find(&conversations).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
 	// 删除对话（ConversationModel）
 	if err := tx.Delete(&models.ConversationModel{}, "session_id = ?", sessionID).Error; err != nil {
 		tx.Rollback()
@@ -297,7 +308,23 @@ func deleteSessionTransaction(sessionID int64) error {
 	}
 
 	// 提交事务
-	return tx.Commit().Error
+	err := tx.Commit().Error
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 删除向量
+	if global.Config.Vector.Enable && len(conversations) > 0 {
+		for _, conv := range conversations {
+			cid := conv.ID
+			err = dialog_service.DeleteConversationVector(cid)
+			if err != nil {
+				logrus.Errorf("向量数据[id: %d]删除错误: %v", cid, err)
+			}
+		}
+	}
+	return nil
 }
 
 // 构建对话树的辅助函数

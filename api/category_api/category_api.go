@@ -75,13 +75,22 @@ func (*CategoryApi) DeleteCategory(c *gin.Context) {
 	categoryIdStr := c.Param("categoryId")
 	categoryId, err := strconv.ParseInt(categoryIdStr, 10, 64)
 	if err != nil {
-		res.FailWithMessage("分类ID无效", c)
+		res.Fail(err, "分类ID无效", c)
 		return
 	}
-
+	var count int64
+	err = global.DB.Model(&models.SessionModel{}).Where("category_id = ?", categoryId).Count(&count).Error
+	if err != nil {
+		res.Fail(err, "查询数据库失败", c)
+		return
+	}
+	if count > 0 {
+		res.SuccessWithMsg("无法删除仍包含有会话的分类", c)
+		return
+	}
 	err = global.DB.Delete(&models.CategoryModel{}, "id = ?", categoryId).Error
 	if err != nil {
-		res.FailWithMessage("删除失败", c)
+		res.Fail(err, "删除失败", c)
 		return
 	}
 	res.SuccessWithMsg("删除成功", c)

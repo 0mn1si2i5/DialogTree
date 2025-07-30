@@ -4,9 +4,11 @@ package middleware
 
 import (
 	"dialogTree/global"
-	"dialogTree/models"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"os"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -54,6 +56,10 @@ func StopDemoTimer() {
 	}
 }
 
+func TestDBRestarter() {
+	initDB()
+}
+
 // 初始化数据库
 func initDB() {
 	demoMutex.Lock()
@@ -75,6 +81,7 @@ func initDB() {
 			return
 		}
 	}
+	logrus.Info("Database truncated successfully")
 
 	// 2. 插入样板数据
 	insertSampleData()
@@ -90,17 +97,60 @@ func initDB() {
 }
 
 func insertSampleData() {
-	// 创建样板分类
-	category := models.CategoryModel{Name: "Demo"}
-	global.DB.Create(&category)
+	sqlFile := "sample_data.sql"
+	logrus.Infof("Inserting sample data from %s", sqlFile)
 
-	// 创建样板会话
-	session := models.SessionModel{
-		Tittle:     "Welcome to DialogTree Demo",
-		Summary:    "This is a sample conversation",
-		CategoryID: category.ID,
+	// 分割多条SQL语句
+	sqlStatements, err := washMySQLDump(sqlFile)
+	if err != nil || sqlStatements == nil {
+		logrus.Errorf("Failed to wash SQL file: %v", err)
+		return
 	}
-	global.DB.Create(&session)
+	if len(sqlStatements) == 0 {
+		logrus.Error("No SQL statements found in SQL file")
+		return
+	}
+	logrus.Debugf("Found %d SQL statements in SQL file", len(sqlStatements))
 
-	// 创建样板对话等...
+	for _, stmt := range sqlStatements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
+			continue
+		}
+
+		if err := global.DB.Exec(stmt).Error; err != nil {
+			logrus.Errorf("Failed to execute SQL statement: %v", err)
+			logrus.Errorf("Statement: %s", stmt)
+			return
+		}
+	}
+	logrus.Info("Sample data inserted successfully")
+}
+
+func washMySQLDump(path string) ([]string, error) {
+	sqlBytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	rawSQL := string(sqlBytes)
+
+	// 清理 /*! MySQL特殊语句 */
+	reSpecial := regexp.MustCompile(`(?s)/\*![0-9]{5}.*?\*/`)
+	rawSQL = reSpecial.ReplaceAllString(rawSQL, "")
+
+	// 清理 LOCK / UNLOCK
+	reLock := regexp.MustCompile(`(?m)^\s*(LOCK TABLES|UNLOCK TABLES).*?\n`)
+	rawSQL = reLock.ReplaceAllString(rawSQL, "")
+
+	// 注释掉 ALTER TABLE ... KEYS
+	reAlter := regexp.MustCompile(`(?im)^\s*ALTER TABLE\s+\S+\s+(DISABLE|ENABLE) KEYS\s*;?`)
+	rawSQL = reAlter.ReplaceAllStringFunc(rawSQL, func(s string) string {
+		return "-- " + s
+	})
+
+	// 分割语句
+	reSplit := regexp.MustCompile(`;[\s]*\n`)
+	statements := reSplit.Split(rawSQL, -1)
+
+	return statements, nil
 }

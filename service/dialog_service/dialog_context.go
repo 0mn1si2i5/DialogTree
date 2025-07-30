@@ -541,7 +541,7 @@ func getLongTermContextConversations(sessionID int64, currentQuestion string) ([
 		err := global.DB.First(&conversation, conversationID).Error
 		if err != nil {
 			// 如果找不到对应的 conversation，记录错误并跳过
-			fmt.Printf("Warning: Conversation with ID %d not found in DB for long-term context: %v\n", conversationID, err)
+			logrus.Warnf("Warning: Conversation with ID %d not found in DB for long-term context: %v\n", conversationID, err)
 			continue
 		}
 
