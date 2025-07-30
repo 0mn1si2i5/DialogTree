@@ -18,12 +18,16 @@ type DB struct {
 }
 
 func dsn(db DB, dbName string) string {
-	if db.Source == "mysql" {
+	switch db.Source {
+	case "mysql":
 		return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=true&loc=Local", db.User, db.Password, db.Host, db.Port, dbName)
-	} else if db.Source == "pgsql" {
+	case "pgsql", "postgres":
 		return fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=disable", db.User, db.Password, db.Host, db.Port, dbName)
+	case "sqlite":
+		return dbName // SQLite只需要文件路径
+	default:
+		return "unsupported db source"
 	}
-	return "unsupported db source"
 }
 
 func (db DB) DSN() string {
@@ -31,5 +35,14 @@ func (db DB) DSN() string {
 }
 
 func (db DB) DSNWithoutDB() string {
-	return dsn(db, "postgres")
+	switch db.Source {
+	case "mysql":
+		return dsn(db, "")
+	case "pgsql", "postgres":
+		return dsn(db, "postgres")
+	case "sqlite":
+		return "" // SQLite不需要创建数据库
+	default:
+		return "unsupported db source"
+	}
 }

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -251,6 +252,14 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 			logrus.Errorf("向量化存储失败: %v", err)
 		}
 	}()
+
+	// 更新 session 时间
+	err = global.DB.Model(&models.SessionModel{}).
+		Where("id = ?", req.SessionID).
+		Update("updated_at", time.Now()).Error
+	if err != nil {
+		logrus.Errorf("更新session时间失败: %v", err)
+	}
 
 	return &ChatResponse{
 		DialogID:       dialogID,
