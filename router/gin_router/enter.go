@@ -10,7 +10,7 @@ import (
 )
 
 func Run() {
-	core.Init()
+	core.InitWithVector()
 	gin.SetMode(global.Config.System.GinMode) // 设置 gin 模式，对应 settings.yaml 中的 gin_mode
 
 	router := gin.Default()

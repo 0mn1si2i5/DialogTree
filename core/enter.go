@@ -4,6 +4,7 @@ package core
 
 import (
 	"dialogTree/global"
+	"github.com/sirupsen/logrus"
 )
 
 //func QuickChat() {
@@ -32,5 +33,7 @@ func InitWithVector() {
 		if err != nil {
 			panic("向量服务初始化失败: " + err.Error())
 		}
+	} else {
+		logrus.Warnf("向量数据库未启用，跳过向量数据库初始化...")
 	}
 }

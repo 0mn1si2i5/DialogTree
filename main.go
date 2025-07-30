@@ -7,6 +7,7 @@ import (
 	"dialogTree/core"
 	"dialogTree/global"
 	"dialogTree/router/cli_router"
+	"dialogTree/router/gin_router"
 )
 
 func main() {
@@ -14,4 +15,5 @@ func main() {
 	core.InitWithVector()
 	cres.SetAgentLabel()
 	cli_router.Run()
+	gin_router.Run()
 }
