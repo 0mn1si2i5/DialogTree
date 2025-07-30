@@ -8,6 +8,7 @@ import (
 	"dialogTree/models"
 	"dialogTree/service/ai_service"
 	"dialogTree/service/ai_service/chat_anywhere"
+	"dialogTree/service/demo_service"
 	"dialogTree/service/dialog_service"
 	"fmt"
 	"strconv"

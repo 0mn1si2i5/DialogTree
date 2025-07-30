@@ -3,11 +3,13 @@
 package conf
 
 type System struct {
-	Mode    string `yaml:"mode"`
-	Ip      string `yaml:"ip"`
-	Port    string `yaml:"port"`
-	Env     string `yaml:"env"`
-	GinMode string `yaml:"ginMode"`
+	Mode      string `yaml:"mode"`
+	Demo      bool   `yaml:"demo"`
+	DemoTimer int    `yaml:"demoTimer"`
+	Ip        string `yaml:"ip"`
+	Port      string `yaml:"port"`
+	Env       string `yaml:"env"`
+	GinMode   string `yaml:"ginMode"`
 }
 
 func (s System) Addr() string {
