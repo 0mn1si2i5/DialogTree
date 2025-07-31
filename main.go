@@ -18,7 +18,13 @@ func main() {
 
 	// 如果没有命令行参数或第一个参数是server,启动HTTP服务器
 	if len(os.Args) <= 1 || os.Args[1] == "server" {
-		gin_router.Run()
+		if global.Config.System.LocalWeb {
+			// 前端文件打包进 web
+			gin_router.RunWithWeb()
+		} else {
+			// 开发环境，ide 运行
+			gin_router.Run()
+		}
 	} else {
 		// 否则使用CLI模式
 		cli_router.Run()

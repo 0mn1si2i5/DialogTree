@@ -1,8 +1,9 @@
-config.yaml
-setting.yaml
+*.yaml
 .idea
 logs
 testdata
 docker
+web/*
 *.tar
 *.sh
+main

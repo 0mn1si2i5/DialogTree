@@ -33,3 +33,15 @@ var ResetDBCommand = &cli.Command{
 		return nil
 	},
 }
+
+var NukeDBCommand = &cli.Command{
+	Name:    "nuke",
+	Aliases: []string{"n"},
+	Usage:   "Nuke database",
+	Action: func(ctx context.Context, c *cli.Command) error {
+		global.Config = core.ReadConf(false)
+		core.InitWithVector()
+		middleware.NukeDB()
+		return nil
+	},
+}

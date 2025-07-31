@@ -4,6 +4,7 @@ package conf
 
 type System struct {
 	Mode      string `yaml:"mode"`
+	LocalWeb  bool   `yaml:"localWeb"`
 	Demo      bool   `yaml:"demo"`
 	DemoTimer int    `yaml:"demoTimer"`
 	Ip        string `yaml:"ip"`

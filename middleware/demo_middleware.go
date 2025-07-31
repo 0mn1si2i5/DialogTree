@@ -42,7 +42,7 @@ func startDemoTimer() {
 	go func() {
 		for range demoTicker.C {
 			logrus.Info("Demo timer triggered, resetting database...")
-			initDB()
+			initDB(true)
 			return // 重置后退出goroutine
 		}
 	}()
@@ -56,12 +56,16 @@ func StopDemoTimer() {
 	}
 }
 
+func NukeDB() {
+	initDB(false)
+}
+
 func TestDBRestarter() {
-	initDB()
+	initDB(true)
 }
 
 // 初始化数据库
-func initDB() {
+func initDB(writeSampleData bool) {
 	demoMutex.Lock()
 	defer demoMutex.Unlock()
 
@@ -82,6 +86,10 @@ func initDB() {
 		}
 	}
 	logrus.Info("Database truncated successfully")
+
+	if !writeSampleData {
+		return
+	}
 
 	// 2. 插入样板数据
 	insertSampleData()

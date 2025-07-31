@@ -26,6 +26,7 @@ var App = &cli.Command{
 		MigrateDBCommand,
 		WebUICommand,
 		ResetDBCommand,
+		NukeDBCommand,
 	},
 	Action: ai_cli.OneTimeChat,
 }
