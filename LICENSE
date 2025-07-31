@@ -1,0 +1,46 @@
+# DialogTree - Dual License
+
+DialogTree is licensed under a dual licensing model:
+
+## For Personal and Open Source Use
+
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+
+### AGPL-3.0 License Summary
+
+You are free to:
+- Use the software for any purpose
+- Study and modify the source code
+- Distribute copies of the software
+- Distribute modified versions
+
+Under the following conditions:
+- **Copyleft**: If you distribute the software or run it as a network service, you must provide the source code under the same license
+- **Network Use**: If you run a modified version as a network service, you must make the source code of your modifications available to users
+- **Attribution**: You must include copyright notices and license information
+
+For the full AGPL-3.0 license text, see: https://www.gnu.org/licenses/agpl-3.0.html
+
+## For Commercial Use
+
+If you wish to use DialogTree Web in a commercial environment without the obligations of AGPL-3.0 (such as disclosing source code modifications), you can obtain a commercial license.
+
+Commercial licenses are available for:
+- Enterprise internal use
+- Commercial product integration
+- SaaS offerings without source code disclosure
+- Custom modifications without open source requirements
+
+### Contact for Commercial Licensing
+
+Email: liran906@gmail.com
+Subject: DialogTree Commercial License Inquiry
+
+---
+
+Copyright (c) 2025 Liran
+
+This dual licensing approach ensures:
+- Open source community can freely use and contribute
+- Commercial users have flexibility without AGPL restrictions
+- Project sustainability through commercial support

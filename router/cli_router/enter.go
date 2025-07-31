@@ -25,6 +25,7 @@ var App = &cli.Command{
 		DialogCommand,
 		MigrateDBCommand,
 		WebUICommand,
+		ResetDBCommand,
 	},
 	Action: ai_cli.OneTimeChat,
 }

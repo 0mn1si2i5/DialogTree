@@ -4,3 +4,5 @@ setting.yaml
 logs
 testdata
 docker
+*.tar
+*.sh
