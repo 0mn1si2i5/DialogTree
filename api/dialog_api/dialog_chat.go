@@ -273,14 +273,26 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 
 	// 如果是新会话的第一条对话，更新会话信息
 	if isNewSession {
-		updates := map[string]interface{}{
-			"tittle":         s.Title,
-			"summary":        s.Summary,
-			"root_dialog_id": &dialogID,
-		}
-		err = global.DB.Model(&models.SessionModel{}).Where("id = ?", req.SessionID).Updates(updates).Error
+		// 先查询当前会话的标题
+		var currentSession models.SessionModel
+		err = global.DB.First(&currentSession, req.SessionID).Error
 		if err != nil {
-			logrus.Errorf("更新会话信息失败: %v", err)
+			logrus.Errorf("查询会话信息失败: %v", err)
+		} else {
+			updates := map[string]interface{}{
+				"summary":        s.Summary,
+				"root_dialog_id": &dialogID,
+			}
+			
+			// 仅当现有标题为空时才更新标题
+			if currentSession.Tittle == "" && s.Title != "" {
+				updates["tittle"] = s.Title
+			}
+			
+			err = global.DB.Model(&models.SessionModel{}).Where("id = ?", req.SessionID).Updates(updates).Error
+			if err != nil {
+				logrus.Errorf("更新会话信息失败: %v", err)
+			}
 		}
 	}
 
@@ -347,12 +359,12 @@ func (DialogApi) StarConversation(c *gin.Context) {
 
 type CommentReq struct {
 	ConversationID int64  `json:"id" binding:"required"`
-	Comment        string `json:"comment" binding:"required"`
+	Comment        string `json:"comment"`
 }
 
 type TittleReq struct {
 	ConversationID int64  `json:"id" binding:"required"`
-	Title          string `json:"title" binding:"required"`
+	Title          string `json:"title"`
 }
 
 func (DialogApi) UpdateConversationTitle(c *gin.Context) {
