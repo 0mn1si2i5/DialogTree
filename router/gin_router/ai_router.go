@@ -31,6 +31,7 @@ func AiRouter(rg *gin.RouterGroup) {
 		dialogGroup.GET("/conversations/:conversationId/ancestors", dialogApi.GetAncestors)                                  // 获取祖先对话
 		dialogGroup.PUT("/conversations/:conversationId/star", middleware.DemoMiddleware, dialogApi.StarConversation)        // 标星/取消标星
 		dialogGroup.PUT("/conversations/comment", middleware.DemoMiddleware, dialogApi.UpdateConversationComment)            // 更新评论
+		dialogGroup.PUT("/conversations/title", middleware.DemoMiddleware, dialogApi.UpdateConversationTitle)                // 更新标题
 		dialogGroup.DELETE("/conversations/:conversationId", middleware.DemoMiddleware, dialogApi.DeleteConversationComment) // 删除评论
 	}
 

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -91,8 +92,8 @@ func (DialogApi) NewChat(c *gin.Context) {
 	// 在主goroutine中处理消息流，确保c.Writer有效
 	for chunk := range msgChan {
 		fullAnswer.WriteString(chunk)
-		// 发送SSE数据
-		c.SSEvent("message", chunk)
+		// 发送SSE数据 - 手动构建SSE格式以保留换行符
+		fmt.Fprintf(c.Writer, "event: message\ndata: %s\n\n", chunk)
 		c.Writer.Flush()
 	}
 
@@ -100,7 +101,15 @@ func (DialogApi) NewChat(c *gin.Context) {
 	<-done
 
 	// 保存对话记录
-	go SaveChatRecord(req, fullAnswer.String(), summary)
+	logrus.Debugf("准备异步保存对话记录，SessionID: %d, ContentLength: %d", req.SessionID, len(fullAnswer.String()))
+	go func() {
+		_, err := SaveChatRecord(req, fullAnswer.String(), summary)
+		if err != nil {
+			logrus.Errorf("异步保存对话记录失败: %v", err)
+		} else {
+			logrus.Debugf("异步保存对话记录成功")
+		}
+	}()
 
 	// 最后的Flush确保所有缓冲数据都已发送
 	c.Writer.Flush()
@@ -167,15 +176,17 @@ type summarizeType struct {
 
 // SaveChatRecord 保存对话记录的辅助函数
 func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, error) {
+	logrus.Debugf("SaveChatRecord 开始执行，SessionID: %d, ParentConversationID: %v", req.SessionID, req.ParentConversationID)
 	var s summarizeType
 	// AI现在返回纯文本摘要，不再需要解析JSON
 	s.Summary = summaryRaw
 	// 标题可以从请求内容中截取，或者设置为默认值
-	s.Title = req.Content[:min(100, len(req.Content))]
+	s.Title = ""
 
 	var dialogID int64
 	var isNewSession bool
 
+	logrus.Debugf("SaveChatRecord 开始处理Dialog逻辑，ParentConversationID: %v", req.ParentConversationID)
 	if req.ParentConversationID == nil {
 		// 没有指定父conversation，在会话根部创建新的对话分支
 		dialog := models.DialogModel{
@@ -183,9 +194,11 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 			ParentID:  nil,
 		}
 		if err := global.DB.Create(&dialog).Error; err != nil {
+			logrus.Errorf("SaveChatRecord 创建Dialog失败: %v", err)
 			return nil, fmt.Errorf("创建对话节点失败: %v", err)
 		}
 
+		logrus.Debugf("SaveChatRecord 成功创建新Dialog，ID: %d", dialog.ID)
 		dialogID = dialog.ID
 		isNewSession = true
 	} else {
@@ -250,10 +263,13 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 		Comment:   "",
 	}
 
+	logrus.Debugf("SaveChatRecord 准备创建Conversation记录，DialogID: %d", dialogID)
 	err := global.DB.Create(&conversation).Error
 	if err != nil {
+		logrus.Errorf("SaveChatRecord 创建Conversation失败: %v", err)
 		return nil, fmt.Errorf("创建对话记录失败: %v", err)
 	}
+	logrus.Debugf("SaveChatRecord 成功创建Conversation，ID: %d", conversation.ID)
 
 	// 如果是新会话的第一条对话，更新会话信息
 	if isNewSession {
@@ -286,6 +302,7 @@ func SaveChatRecord(req NewChatReq, answer, summaryRaw string) (*ChatResponse, e
 		logrus.Errorf("更新session时间失败: %v", err)
 	}
 
+	logrus.Debugf("SaveChatRecord 执行完成，ConversationID: %d, DialogID: %d", conversation.ID, dialogID)
 	return &ChatResponse{
 		DialogID:       dialogID,
 		ConversationID: conversation.ID,
@@ -331,6 +348,35 @@ func (DialogApi) StarConversation(c *gin.Context) {
 type CommentReq struct {
 	ConversationID int64  `json:"id" binding:"required"`
 	Comment        string `json:"comment" binding:"required"`
+}
+
+type TittleReq struct {
+	ConversationID int64  `json:"id" binding:"required"`
+	Title          string `json:"title" binding:"required"`
+}
+
+func (DialogApi) UpdateConversationTitle(c *gin.Context) {
+	var req TittleReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		res.FailWithMessage("参数错误", c)
+		return
+	}
+
+	result := global.DB.Model(&models.ConversationModel{}).
+		Where("id = ?", req.ConversationID).
+		Update("title", req.Title)
+
+	if result.Error != nil {
+		res.Fail(result.Error, "更新标题失败", c)
+		return
+	}
+
+	if result.RowsAffected == 0 {
+		res.FailWithMessage("会话不存在或标题未更改", c)
+		return
+	}
+
+	res.OkWithMessage("标题更新成功", c)
 }
 
 // UpdateConversationComment 更新会话评论
@@ -476,4 +522,21 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// safeSubstring 安全地截取字符串，避免截断UTF-8字符
+func safeSubstring(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+
+	// 截取到最大长度，然后向前寻找有效的UTF-8字符边界
+	for i := maxLen; i >= 0; i-- {
+		if utf8.ValidString(s[:i]) {
+			return s[:i]
+		}
+	}
+
+	// 如果找不到有效边界，返回空字符串（不应该发生）
+	return ""
 }

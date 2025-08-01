@@ -23,6 +23,7 @@ func Run() {
 	AiRouter(routerGroup)
 
 	addr := global.Config.System.Addr()
+	logrus.Infof("gin running with development router")
 	logrus.Infof("gin running on: %s", addr)
 	err := router.Run(addr)
 	if err != nil {
