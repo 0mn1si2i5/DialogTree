@@ -5,6 +5,7 @@ package gin_router
 import (
 	"dialogTree/core"
 	"dialogTree/global"
+	"dialogTree/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"os"
@@ -16,6 +17,12 @@ func Run() {
 	gin.SetMode(global.Config.System.GinMode) // 设置 gin 模式，对应 settings.yaml 中的 gin_mode
 
 	router := gin.Default()
+	
+	// 条件性添加访问日志中间件
+	if global.Config.System.EnableAccessLog {
+		router.Use(middleware.AccessLogMiddleware())
+	}
+	
 	router.Static("/uploads", "uploads") // 配置静态路由访问上传文件
 
 	routerGroup := router.Group("/api")
@@ -36,6 +43,11 @@ func RunWithWeb() {
 	gin.SetMode(global.Config.System.GinMode)
 
 	router := gin.Default()
+
+	// 条件性添加访问日志中间件
+	if global.Config.System.EnableAccessLog {
+		router.Use(middleware.AccessLogMiddleware())
+	}
 
 	// 静态资源：前端打包后的 JS/CSS 资源
 	router.Static("/assets", "./web/assets")

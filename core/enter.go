@@ -36,4 +36,12 @@ func InitWithVector() {
 	} else {
 		logrus.Warnf("向量数据库未启用，跳过向量数据库初始化...")
 	}
+
+	// 初始化IP数据库（仅在启用访问日志时）
+	if global.Config.System.EnableAccessLog {
+		InitIPDB()
+		logrus.Infof("IP数据库初始化成功，访问日志功能已启用")
+	} else {
+		logrus.Infof("访问日志功能已关闭，跳过IP数据库初始化")
+	}
 }
